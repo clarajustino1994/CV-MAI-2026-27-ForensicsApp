@@ -12,7 +12,7 @@ class HistogramTool(ForensicsTool):
     #Basic information about the tool
     tool_name = "histogram"
     title = "Histogram visualization"
-    category = "Image enhancement"
+    category = "Set 2 duties"
     description = "Visualize the intensity histogram of the current image"
 
     def run(

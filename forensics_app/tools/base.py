@@ -33,3 +33,6 @@ class ForensicsTool(ABC):
     @abstractmethod
     def run(self, parent: tk.Misc, document: ImageDocument) -> ToolResult | None:
         """Run the feature; return ``None`` when the user cancels."""
+
+    def reset(self) -> None:
+        """Forget any state kept between runs; called when the image is reset."""

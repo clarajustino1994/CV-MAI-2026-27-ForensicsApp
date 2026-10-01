@@ -13,7 +13,7 @@ class ContrastStretchingTool(ForensicsTool):
     #Basic information about the tool
     tool_id = "contrast_stretching"
     title = "Contrast stretching"
-    category = "Image enhancement"
+    category = "Set 2 duties"
     description = "Enhance the contrast of the working image using linear contrast stretching."
 
     def run(

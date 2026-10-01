@@ -189,6 +189,8 @@ class MainWindow:
             self._refresh()
 
     def reset(self) -> None:
+        for tool in self.registry.all():
+            tool.reset()
         if self.document.reset():
             self.status.set("Restored the original image.")
             self._show_default_details()

@@ -15,4 +15,6 @@ from forensics_app.ui.main_window import MainWindow
 def main() -> None:
     root = tk.Tk()
     MainWindow(root, build_tool_registry())
+    root.after_idle(root.attributes, "-topmost", False)
+    root.focus_force()
     root.mainloop()
