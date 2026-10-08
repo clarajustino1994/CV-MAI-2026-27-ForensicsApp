@@ -8,6 +8,9 @@ from .image_info import ImageInfoTool
 from .registry import ToolRegistry
 from .histogram import HistogramTool
 from .masking import MaskingTool
+from .convolution import Convolution
+from .filters import FiltersTool
+
 
 
 def build_tool_registry() -> ToolRegistry:
@@ -20,6 +23,8 @@ def build_tool_registry() -> ToolRegistry:
             ContrastStretchingTool(),
             HistogramTool(),
             MaskingTool(),
+            Convolution(),
+            FiltersTool(),
         ]
     )
 
