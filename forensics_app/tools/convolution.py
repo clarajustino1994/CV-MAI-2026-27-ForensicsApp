@@ -7,15 +7,25 @@ from PIL import Image
 from scipy import ndimage
 
 from forensics_app.core import ImageDocument
+
 from .base import ForensicsTool, ToolResult
-from .dialogs import ask_choice
+from .dialogs import ask_odd_size
 
-KERNEL_SIZES = ("1", "3", "5", "7", "9")
 
-def apply_convolution(
-        image: Image.Image,
-        kernel_size: int
-) -> Image.Image:
+def max_kernel_size(image: Image.Image) -> int:
+
+    width, height = image.size
+    largest = min(width, height)
+
+    # Kernels need a center pixel, so keep the size odd
+    return largest if largest % 2 == 1 else largest - 1
+
+
+def apply_convolution(image: Image.Image, kernel_size: int) -> Image.Image:
+
+    # Make sure the kernel fits inside the image
+    if not 1 <= kernel_size <= max_kernel_size(image):
+        raise ValueError(f"Kernel size must be between 1 and {max_kernel_size(image)}.")
 
     # Convert the image to grayscale
     gray = image.convert("L")
@@ -23,45 +33,31 @@ def apply_convolution(
     # Convert the image to a Numpy array
     img = np.array(gray, dtype=np.float32)
 
-    # Create a square kernel filled with ones
-    kernel = np.ones(
-        (kernel_size, kernel_size),
-        dtype=np.float32
-    )
-    # Normalize the kernel
-    kernel /= kernel.size
-
-    #Apply the convolution
-    result = ndimage.convolve(
-        img,
-        kernel,
-        mode="reflect"
-    )
+    # Convolve with a normalized square kernel of ones (mean filter).
+    # uniform_filter gives the same result as ndimage.convolve with
+    # np.ones((k, k)) / k**2, but stays fast for very large kernels.
+    result = ndimage.uniform_filter(img, size=kernel_size, mode="reflect")
 
     # Keep pixel values between 0 and 255
-    result = np.clip(result, 0, 255)
+    result = np.clip(np.rint(result), 0, 255)
 
     # Convert the result to 8-bit unsigned integers
     result = result.astype(np.uint8)
 
     # Convert the NumPy array back to a grayscale image
-    return Image.fromarray(
-        result,
-        mode="L"
-    )
+    return Image.fromarray(result, mode="L")
 
-def ask_kernel_size(parent: tk.Misc) -> int | None:
 
-    # Ask the user to choose a kernel size
-    index = ask_choice(
+def ask_kernel_size(parent: tk.Misc, maximum: int) -> int | None:
+
+    # Ask the user to choose a kernel size between 1x1 and the image size
+    return ask_odd_size(
         parent,
         "Convolution",
-        "Choose a kernel size",
-        KERNEL_SIZES,
+        f"Choose a kernel size (1 to {maximum} pixels)",
+        maximum,
     )
 
-    #  Return the selected size or None if cancelled
-    return None if index is None else int(KERNEL_SIZES[index])
 
 class Convolution(ForensicsTool):
 
@@ -74,13 +70,14 @@ class Convolution(ForensicsTool):
         self,
         parent: tk.Misc,
         document: ImageDocument,
-    )-> ToolResult | None:
+    ) -> ToolResult | None:
 
         # Check that an image is loaded
         assert document.current is not None
 
-        # Ask the user to choose the kernel size
-        kernel_size = ask_kernel_size(parent)
+        # Ask the user to choose the kernel size, limited by the image size
+        maximum = max_kernel_size(document.current)
+        kernel_size = ask_kernel_size(parent, maximum)
 
         if kernel_size is None:
             return None
@@ -93,9 +90,10 @@ class Convolution(ForensicsTool):
 
         return ToolResult(
             image=output,
-            message=f"Applied{kernel_size}x{kernel_size} convolution.",
+            message=f"Applied {kernel_size}x{kernel_size} convolution.",
             details={
                 "Operation": "Convolution",
                 "Kernel size": f"{kernel_size}x{kernel_size}",
+                "Maximum kernel size": f"{maximum}x{maximum}",
             },
         )

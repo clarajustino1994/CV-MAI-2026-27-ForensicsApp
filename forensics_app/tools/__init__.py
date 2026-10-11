@@ -2,15 +2,16 @@
 
 from .channel_split import ChannelSplitTool
 from .channel_swap import ChannelSwapTool
-from .grayscale import GrayscaleTool
 from .contrast_stretching import ContrastStretchingTool
-from .image_info import ImageInfoTool
-from .registry import ToolRegistry
-from .histogram import HistogramTool
-from .masking import MaskingTool
 from .convolution import Convolution
+from .edges import CannyTool, EdgeOverlayTool
 from .filters import FiltersTool
-
+from .grayscale import GrayscaleTool
+from .histogram import HistogramTool
+from .image_info import ImageInfoTool
+from .masking import MaskingTool
+from .registry import ToolRegistry
+from .sharpening import SharpeningTool
 
 
 def build_tool_registry() -> ToolRegistry:
@@ -25,6 +26,9 @@ def build_tool_registry() -> ToolRegistry:
             MaskingTool(),
             Convolution(),
             FiltersTool(),
+            CannyTool(),
+            EdgeOverlayTool(),
+            SharpeningTool(),
         ]
     )
 

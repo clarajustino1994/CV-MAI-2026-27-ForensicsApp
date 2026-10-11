@@ -5,6 +5,7 @@ from __future__ import annotations
 import tkinter as tk
 
 from forensics_app.core import ImageDocument
+
 from .base import ForensicsTool, ToolResult
 
 
@@ -23,6 +24,10 @@ class ImageInfoTool(ForensicsTool):
                 "Width": f"{image.width} px",
                 "Height": f"{image.height} px",
                 "Mode": image.mode,
-                "Format": document.path.suffix.upper().lstrip(".") if document.path else "Unknown",
+                "Format": (
+                    document.path.suffix.upper().lstrip(".")
+                    if document.path
+                    else "Unknown"
+                ),
             },
         )

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import tkinter as tk
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-import tkinter as tk
 from typing import Any
 
 from PIL import Image
