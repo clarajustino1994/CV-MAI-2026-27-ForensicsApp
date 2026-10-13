@@ -12,6 +12,7 @@ from forensics_app.core import ImageDocument
 from .base import ForensicsTool, ToolResult
 from .dialogs import ask_choice
 
+SIGMA_FILTERS = ("Gaussian", "Laplace")
 FILTERS = ("Gaussian", "Median", "Sobel", "Prewitt", "Roberts", "Laplace")
 
 
@@ -19,6 +20,7 @@ def apply_filter(
     image: Image.Image,
     filter_name: str,
     sigma: float,
+    kernel_size: int = 3,
 ) -> Image.Image:
 
     gray = image.convert("L")
@@ -30,7 +32,7 @@ def apply_filter(
     elif filter_name == "Median":
 
         footprint = np.ones(
-            (3, 3),
+            (kernel_size, kernel_size),
             dtype=bool,
         )
 
@@ -40,7 +42,14 @@ def apply_filter(
         )
 
     elif filter_name == "Laplace":
-        result = filters.laplace(img)
+        # Smooth first so the Laplacian does not amplify noise
+        smoothed = filters.gaussian(img, sigma=sigma)
+        result = np.abs(filters.laplace(smoothed))
+
+        # Normalizing
+        peak = result.max()
+        if peak > 0:
+            result = result / peak
 
     elif filter_name == "Prewitt":
         result = filters.prewitt(img)
@@ -72,14 +81,25 @@ def ask_filter(parent: tk.Misc) -> str | None:
     return None if index is None else FILTERS[index]
 
 
-def ask_sigma(parent: tk.Misc) -> float | None:
+def ask_sigma(parent: tk.Misc, title: str) -> float | None:
     return simpledialog.askfloat(
-        "Gaussian filter",
+        title,
         "Enter sigma:",
         parent=parent,
         minvalue=0.1,
         maxvalue=20.0,
         initialvalue=1.0,
+    )
+
+
+def ask_kernel_size(parent: tk.Misc) -> int | None:
+    return simpledialog.askinteger(
+        "Median filter",
+        "Enter kernel size:",
+        parent=parent,
+        minvalue=1,
+        maxvalue=31,
+        initialvalue=3,
     )
 
 
@@ -104,18 +124,29 @@ class FiltersTool(ForensicsTool):
 
         sigma = 1.0
 
-        if filter_name == "Gaussian":
-            selected_sigma = ask_sigma(parent)
+        if filter_name in SIGMA_FILTERS:
+            selected_sigma = ask_sigma(parent, f"{filter_name} filter")
 
             if selected_sigma is None:
                 return None
 
             sigma = selected_sigma
 
+        kernel_size = 3
+
+        if filter_name == "Median":
+            selected_kernel_size = ask_kernel_size(parent)
+
+            if selected_kernel_size is None:
+                return None
+
+            kernel_size = selected_kernel_size
+
         output = apply_filter(
             document.current,
             filter_name,
             sigma,
+            kernel_size,
         )
 
         details = {
@@ -123,8 +154,11 @@ class FiltersTool(ForensicsTool):
             "Filter": filter_name,
         }
 
-        if filter_name == "Gaussian":
+        if filter_name in SIGMA_FILTERS:
             details["Sigma"] = f"{sigma:.2f}"
+
+        if filter_name == "Median":
+            details["Kernel size"] = f"{kernel_size}x{kernel_size}"
 
         return ToolResult(
             image=output,
