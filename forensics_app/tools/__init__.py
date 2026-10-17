@@ -12,6 +12,7 @@ from .image_info import ImageInfoTool
 from .masking import MaskingTool
 from .registry import ToolRegistry
 from .sharpening import SharpeningTool
+from .cross_correlation import CrossCorrelationTool
 
 
 def build_tool_registry() -> ToolRegistry:
@@ -29,6 +30,7 @@ def build_tool_registry() -> ToolRegistry:
             CannyTool(),
             EdgeOverlayTool(),
             SharpeningTool(),
+            CrossCorrelationTool(),
         ]
     )
 
