@@ -13,6 +13,7 @@ from .masking import MaskingTool
 from .registry import ToolRegistry
 from .sharpening import SharpeningTool
 from .cross_correlation import CrossCorrelationTool
+from .matching_configs import MatchingConfigsTool
 
 
 def build_tool_registry() -> ToolRegistry:
@@ -31,6 +32,7 @@ def build_tool_registry() -> ToolRegistry:
             EdgeOverlayTool(),
             SharpeningTool(),
             CrossCorrelationTool(),
+            MatchingConfigsTool(),
         ]
     )
 
