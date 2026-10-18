@@ -102,13 +102,14 @@ class MainWindow:
         ttk.Label(
             sidebar, text="Forensics tools", style="Title.TLabel", background="#eef1f5"
         ).pack(anchor="w", pady=(0, 12))
+        tool_list = self._build_scrollable(sidebar)
         for category, tools in self.registry.categories():
-            ttk.Label(sidebar, text=category, style="Category.TLabel").pack(
+            ttk.Label(tool_list, text=category, style="Category.TLabel").pack(
                 anchor="w", pady=(9, 4)
             )
             for tool in tools:
                 button = ttk.Button(
-                    sidebar,
+                    tool_list,
                     text=tool.title,
                     style="Tool.TButton",
                     command=lambda selected=tool: self.run_tool(selected),
@@ -145,6 +146,46 @@ class MainWindow:
             padding=(10, 6),
             relief="sunken",
         ).pack(fill="x")
+
+    def _build_scrollable(self, parent: ttk.Frame) -> ttk.Frame:
+        """Return a frame inside ``parent`` that scrolls vertically when too tall."""
+        canvas = tk.Canvas(parent, background="#eef1f5", highlightthickness=0)
+        scrollbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        # Gap so the buttons do not touch the scrollbar
+        scrollbar.pack(side="right", fill="y", padx=(8, 0))
+        canvas.pack(side="left", fill="both", expand=True)
+
+        content = ttk.Frame(canvas, style="Sidebar.TFrame")
+        window = canvas.create_window((0, 0), window=content, anchor="nw")
+
+        content.bind(
+            "<Configure>",
+            lambda _event: canvas.configure(scrollregion=canvas.bbox("all")),
+        )
+        canvas.bind(
+            "<Configure>",
+            lambda event: canvas.itemconfigure(window, width=event.width),
+        )
+
+        def on_wheel(event: tk.Event) -> None:
+            # Scroll only when the pointer is over the tool list
+            hovered = self.root.winfo_containing(event.x_root, event.y_root)
+            if hovered is None or not str(hovered).startswith(str(canvas)):
+                return
+            if content.winfo_reqheight() <= canvas.winfo_height():
+                return
+            if event.num == 4:
+                canvas.yview_scroll(-1, "units")
+            elif event.num == 5:
+                canvas.yview_scroll(1, "units")
+            elif event.delta:
+                step = event.delta // 120 if abs(event.delta) >= 120 else event.delta
+                canvas.yview_scroll(-step, "units")
+
+        for sequence in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+            self.root.bind_all(sequence, on_wheel, add="+")
+        return content
 
     def _bind_shortcuts(self) -> None:
         self.root.bind_all("<Control-o>", lambda _event: self.open_image())
