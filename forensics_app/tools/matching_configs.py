@@ -100,7 +100,11 @@ class MatchingConfigsTool(ForensicsTool):
         ).astype(np.uint8)
 
         if best_match >= threshold:
-            result_array[y, x] = [255, 0, 0]
+            radius = 1
+            result_array[
+                max(0, y - radius):y + radius + 1,
+                max(0, x - radius):x + radius + 1,
+            ] = [255, 0 , 0]
 
         # Convert the result back to a PIL image
         result_image = Image.fromarray(result_array)
