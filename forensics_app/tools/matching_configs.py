@@ -96,7 +96,7 @@ class MatchingConfigsTool(ForensicsTool):
 
         # Darken the original image
         result_array = (
-            original_array * 0.6
+            original_array * 0.4
         ).astype(np.uint8)
 
         if best_match >= threshold:
