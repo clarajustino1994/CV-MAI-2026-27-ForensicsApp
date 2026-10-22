@@ -6,11 +6,13 @@ from .contrast_stretching import ContrastStretchingTool
 from .convolution import Convolution
 from .cross_correlation import CrossCorrelationTool
 from .edges import CannyTool, EdgeOverlayTool
+from .feature_matching import FeatureMatchingTool
 from .filters import FiltersTool
 from .grayscale import GrayscaleTool
 from .histogram import HistogramTool
 from .hog import HogTool
 from .image_info import ImageInfoTool
+from .image_lookup import ImageLookupTool
 from .masking import MaskingTool
 from .matching_configs import MatchingConfigsTool
 from .person_detection import PersonDetectionTool
@@ -37,6 +39,8 @@ def build_tool_registry() -> ToolRegistry:
             MatchingConfigsTool(),
             HogTool(),
             PersonDetectionTool(),
+            FeatureMatchingTool(),
+            ImageLookupTool(),
         ]
     )
 
