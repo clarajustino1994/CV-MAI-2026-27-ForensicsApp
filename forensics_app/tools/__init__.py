@@ -16,6 +16,8 @@ from .matching_configs import MatchingConfigsTool
 from .person_detection import PersonDetectionTool
 from .registry import ToolRegistry
 from .sharpening import SharpeningTool
+from .corner_detection import CornerDetectionTool
+from .descriptor_extractor import DescriptorExtractorTool
 
 
 def build_tool_registry() -> ToolRegistry:
@@ -37,6 +39,8 @@ def build_tool_registry() -> ToolRegistry:
             MatchingConfigsTool(),
             HogTool(),
             PersonDetectionTool(),
+            CornerDetectionTool(),
+            DescriptorExtractorTool(),
         ]
     )
 
