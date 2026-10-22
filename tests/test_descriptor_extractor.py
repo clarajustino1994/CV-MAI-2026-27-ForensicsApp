@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import unittest
@@ -8,10 +7,10 @@ import numpy as np
 from PIL import Image
 
 from forensics_app.core import ImageDocument
-from forensics_app.tools.descriptor_extractor import DescriptorExtractorTool
+from forensics_app.tools.corner_detection import CornerDetectionTool
 
 
-MODULE = "forensics_app.tools.descriptor_extractor"
+MODULE = "forensics_app.tools.corner_detection"
 
 
 def make_document(image: Image.Image) -> ImageDocument:
@@ -21,123 +20,65 @@ def make_document(image: Image.Image) -> ImageDocument:
 
 
 def textured_image(size: int = 128) -> Image.Image:
-    """Create an image with texture for testing."""
-    rng = np.random.default_rng(42)
-    pixels = rng.integers(
-        0, 256, size=(size, size), dtype=np.uint8
-    )
+    """Create an image with corners for testing."""
+    pixels = np.zeros((size, size), dtype=np.uint8)
+    pixels[20:60, 20:60] = 255
+    pixels[70:110, 70:110] = 180
     return Image.fromarray(pixels).convert("RGB")
 
 
-class DescriptorExtractorTests(unittest.TestCase):
+class CornerDetectionTests(unittest.TestCase):
 
-    def test_orb_extracts_keypoints_and_descriptors(self) -> None:
+    def test_fast_detects_corners(self) -> None:
         document = make_document(textured_image())
+
+        # Simulate a FAST response containing one clear corner.
+        fast_response = np.zeros((128, 128), dtype=np.float32)
+        fast_response[40, 40] = 1.0
 
         with (
             mock.patch(
                 f"{MODULE}.simpledialog.askstring",
-                return_value="ORB",
-            ),
-            mock.patch(
-                f"{MODULE}.simpledialog.askinteger",
-                return_value=200,
-            ),
-        ):
-            result = DescriptorExtractorTool().run(None, document)
-
-        self.assertIsNotNone(result)
-        self.assertIsNotNone(result.image)
-        self.assertEqual(result.image.size, document.current.size)
-        self.assertEqual(result.details["Method"], "ORB")
-        self.assertGreater(result.details["Keypoints"], 0)
-
-    def test_sift_extracts_keypoints_and_descriptors(self) -> None:
-        document = make_document(textured_image())
-
-        with (
-            mock.patch(
-                f"{MODULE}.simpledialog.askstring",
-                return_value="SIFT",
-            ),
-            mock.patch(
-                f"{MODULE}.simpledialog.askinteger",
-                side_effect=[8, 3],
+                return_value="FAST",
             ),
             mock.patch(
                 f"{MODULE}.simpledialog.askfloat",
-                return_value=1.6,
+                return_value=0.1,
+            ),
+            mock.patch(
+                f"{MODULE}.corner_fast",
+                return_value=fast_response,
             ),
         ):
-            result = DescriptorExtractorTool().run(None, document)
+            result = CornerDetectionTool().run(None, document)
 
         self.assertIsNotNone(result)
         self.assertIsNotNone(result.image)
-        self.assertEqual(result.image.size, document.current.size)
-        self.assertEqual(result.details["Method"], "SIFT")
-        self.assertGreater(result.details["Keypoints"], 0)
+        self.assertEqual(result.image.mode, "RGB")
+        self.assertEqual(result.image.size, (128, 256))
+        self.assertEqual(result.details["Method"], "FAST")
+        self.assertGreater(result.details["Number of peaks"], 0)
 
-    def test_returns_none_when_method_is_cancelled(self) -> None:
-        document = make_document(textured_image())
-
-        with mock.patch(
-            f"{MODULE}.simpledialog.askstring",
-            return_value=None,
-        ):
-            result = DescriptorExtractorTool().run(None, document)
-
-        self.assertIsNone(result)
-
-    def test_returns_none_when_orb_configuration_is_cancelled(self) -> None:
+    def test_harris_detects_corners(self) -> None:
         document = make_document(textured_image())
 
         with (
             mock.patch(
                 f"{MODULE}.simpledialog.askstring",
-                return_value="ORB",
+                return_value="HARRIS",
             ),
             mock.patch(
-                f"{MODULE}.simpledialog.askinteger",
-                return_value=None,
+                f"{MODULE}.simpledialog.askfloat",
+                return_value=0.1,
             ),
         ):
-            result = DescriptorExtractorTool().run(None, document)
-
-        self.assertIsNone(result)
-
-    def test_rejects_invalid_method(self) -> None:
-        document = make_document(textured_image())
-
-        with mock.patch(
-            f"{MODULE}.simpledialog.askstring",
-            return_value="INVALID",
-        ):
-            result = DescriptorExtractorTool().run(None, document)
+            result = CornerDetectionTool().run(None, document)
 
         self.assertIsNotNone(result)
-        self.assertIn("Choose ORB or SIFT", result.message)
-
-    def test_original_image_is_not_modified(self) -> None:
-        image = textured_image()
-        document = make_document(image.copy())
-        original_pixels = np.asarray(document.current).copy()
-
-        with (
-            mock.patch(
-                f"{MODULE}.simpledialog.askstring",
-                return_value="ORB",
-            ),
-            mock.patch(
-                f"{MODULE}.simpledialog.askinteger",
-                return_value=200,
-            ),
-        ):
-            DescriptorExtractorTool().run(None, document)
-
-        np.testing.assert_array_equal(
-            np.asarray(document.current),
-            original_pixels,
-        )
+        self.assertIsNotNone(result.image)
+        self.assertEqual(result.details["Method"], "HARRIS")
+        self.assertEqual(result.details["Peak threshold"], "0.10")
+        self.assertGreater(result.details["Number of peaks"], 0)
 
 if __name__ == "__main__":
     unittest.main()
