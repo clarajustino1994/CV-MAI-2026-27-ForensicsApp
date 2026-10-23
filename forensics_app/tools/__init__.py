@@ -4,7 +4,9 @@ from .channel_split import ChannelSplitTool
 from .channel_swap import ChannelSwapTool
 from .contrast_stretching import ContrastStretchingTool
 from .convolution import Convolution
+from .corner_detection import CornerDetectionTool
 from .cross_correlation import CrossCorrelationTool
+from .descriptor_extractor import DescriptorExtractorTool
 from .edges import CannyTool, EdgeOverlayTool
 from .feature_matching import FeatureMatchingTool
 from .filters import FiltersTool
@@ -41,6 +43,8 @@ def build_tool_registry() -> ToolRegistry:
             PersonDetectionTool(),
             FeatureMatchingTool(),
             ImageLookupTool(),
+            CornerDetectionTool(),
+            DescriptorExtractorTool(),
         ]
     )
 
