@@ -25,26 +25,31 @@ from .sharpening import SharpeningTool
 def build_tool_registry() -> ToolRegistry:
     return ToolRegistry(
         [
-            ImageInfoTool(),
-            GrayscaleTool(),
-            ChannelSplitTool(),
-            ChannelSwapTool(),
-            ContrastStretchingTool(),
-            HistogramTool(),
-            MaskingTool(),
+            # Set 5
+            CornerDetectionTool(),
+            DescriptorExtractorTool(),
+            FeatureMatchingTool(),
+            ImageLookupTool(),
+            # Set 4
+            CrossCorrelationTool(),
+            MatchingConfigsTool(),
+            HogTool(),
+            PersonDetectionTool(),
+            # Set 3
             Convolution(),
             FiltersTool(),
             CannyTool(),
             EdgeOverlayTool(),
             SharpeningTool(),
-            CrossCorrelationTool(),
-            MatchingConfigsTool(),
-            HogTool(),
-            PersonDetectionTool(),
-            FeatureMatchingTool(),
-            ImageLookupTool(),
-            CornerDetectionTool(),
-            DescriptorExtractorTool(),
+            # Set 2
+            ChannelSplitTool(),
+            ChannelSwapTool(),
+            ContrastStretchingTool(),
+            HistogramTool(),
+            MaskingTool(),
+            # Starter tools
+            ImageInfoTool(),
+            GrayscaleTool(),
         ]
     )
 

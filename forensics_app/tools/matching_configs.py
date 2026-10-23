@@ -1,26 +1,27 @@
 from __future__ import annotations
 
 import tkinter as tk
-
-from tkinter import filedialog, simpledialog, messagebox
+from tkinter import filedialog, messagebox, simpledialog
 
 import numpy as np
 from PIL import Image
 from skimage.feature import match_template
 
 from forensics_app.core import ImageDocument
+
 from .base import ForensicsTool, ToolResult
+
 
 class MatchingConfigsTool(ForensicsTool):
     tool_id = "matching_configs"
     title = "Normalized matching configs"
-    category = "Set 4"
+    category = "Set 4 duties"
     description = "Compare the template angle and matching threshold."
 
     def run(
-            self,
-            parent: tk.Misc,
-            document: ImageDocument,
+        self,
+        parent: tk.Misc,
+        document: ImageDocument,
     ) -> ToolResult | None:
         assert document.current is not None
         messagebox.showinfo(
@@ -36,9 +37,10 @@ class MatchingConfigsTool(ForensicsTool):
         filename = filedialog.askopenfilename(
             parent=parent,
             title="Choose template image",
-            filetypes=[("Image Files", "*.png *.jpg *.jpeg *.tif *.tiff"),
+            filetypes=[
+                ("Image Files", "*.png *.jpg *.jpeg *.tif *.tiff"),
                 ("All files", "*.*"),
-           ],
+            ],
         )
 
         if not filename:
@@ -57,7 +59,7 @@ class MatchingConfigsTool(ForensicsTool):
         if angle is None:
             return None
 
-        #Ask fot the matching threshold
+        # Ask fot the matching threshold
         threshold = simpledialog.askfloat(
             "Template matching",
             "Matching threshold (0 to 1):",
@@ -68,7 +70,7 @@ class MatchingConfigsTool(ForensicsTool):
         )
         if threshold is None:
             return None
-        #Convert images to grayscale and rotate the template
+        # Convert images to grayscale and rotate the template
         image = document.current.convert("L")
         template = Image.open(filename).convert("L")
         template = template.rotate(angle, expand=True)
@@ -81,13 +83,20 @@ class MatchingConfigsTool(ForensicsTool):
         template_array = np.asarray(template, dtype=np.float32) / 255.0
 
         # Calculate normalized cross-correlation
-        correlation = match_template(image_array, template_array, pad_input=True,)
+        correlation = match_template(
+            image_array,
+            template_array,
+            pad_input=True,
+        )
 
         # Find the highest correlation value
         best_match = float(correlation.max())
 
-        #Find the position with the highest correlation
-        y, x = np.unravel_index(np.argmax(correlation), correlation.shape,)
+        # Find the position with the highest correlation
+        y, x = np.unravel_index(
+            np.argmax(correlation),
+            correlation.shape,
+        )
 
         # Find all pixels where correlation exceeds the threshold
 
@@ -95,26 +104,26 @@ class MatchingConfigsTool(ForensicsTool):
         original_array = np.array(document.current.convert("RGB"))
 
         # Darken the original image
-        result_array = (
-            original_array * 0.4
-        ).astype(np.uint8)
+        result_array = (original_array * 0.4).astype(np.uint8)
 
         if best_match >= threshold:
             radius = 1
             result_array[
-                max(0, y - radius):y + radius + 1,
-                max(0, x - radius):x + radius + 1,
-            ] = [255, 0 , 0]
+                max(0, y - radius) : y + radius + 1,
+                max(0, x - radius) : x + radius + 1,
+            ] = [255, 0, 0]
 
         # Convert the result back to a PIL image
         result_image = Image.fromarray(result_array)
 
         return ToolResult(
-            image = result_image,
-            message = (
-                 "Template match found." if best_match >= threshold else "No match above the selected threshold."
+            image=result_image,
+            message=(
+                "Template match found."
+                if best_match >= threshold
+                else "No match above the selected threshold."
             ),
-            details = {
+            details={
                 "Operation": "Template matching",
                 "Rotation angle": f"{angle} degrees",
                 "Threshold": f"{threshold:.2f}",

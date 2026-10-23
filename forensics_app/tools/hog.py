@@ -97,7 +97,7 @@ def ask_hog_params(
 class HogTool(ForensicsTool):
     tool_id = "hog"
     title = "HOG extraction"
-    category = "Set 4"
+    category = "Set 4 duties"
     description = "Extract and visualise the Histogram of Oriented Gradients."
 
     def run(

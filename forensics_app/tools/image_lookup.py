@@ -5,7 +5,7 @@ from __future__ import annotations
 import tkinter as tk
 from dataclasses import dataclass
 from pathlib import Path
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 
 import numpy as np
 from PIL import Image, UnidentifiedImageError
@@ -96,6 +96,12 @@ def rank_images(
 
 
 def ask_folder(parent: tk.Misc) -> str:
+    messagebox.showinfo(
+        "Choose the folder to search",
+        "Select a folder of images. Every image in it and its subfolders "
+        "is compared with the current image to find the closest one.",
+        parent=parent,
+    )
     return filedialog.askdirectory(
         parent=parent, title="Choose the folder to search", mustexist=True
     )
@@ -109,7 +115,7 @@ def ask_criterion(parent: tk.Misc) -> str | None:
 class ImageLookupTool(ForensicsTool):
     tool_id = "image_lookup"
     title = "Closest image lookup"
-    category = "Set 5"
+    category = "Set 5 duties"
     description = "Find the image in a folder with the most keypoint matches."
 
     def run(

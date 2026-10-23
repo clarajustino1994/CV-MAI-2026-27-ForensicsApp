@@ -96,7 +96,7 @@ class MainWindow:
         body = ttk.Panedwindow(container, orient="horizontal")
         body.pack(fill="both", expand=True)
 
-        sidebar = ttk.Frame(body, style="Sidebar.TFrame", padding=12, width=235)
+        sidebar = ttk.Frame(body, style="Sidebar.TFrame", padding=12, width=280)
         sidebar.pack_propagate(False)
         body.add(sidebar, weight=0)
         ttk.Label(

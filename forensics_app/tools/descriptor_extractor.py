@@ -4,17 +4,21 @@ import tkinter as tk
 from tkinter import simpledialog
 
 import numpy as np
-from PIL import Image, ImageDraw
-from skimage.feature import ORB, SIFT
+from PIL import ImageDraw
+from skimage import feature
 
 from forensics_app.core import ImageDocument
+
 from .base import ForensicsTool, ToolResult
+from .constants import DESCRIPTORS, ORB, SIFT
+from .dialogs import ask_choice
+
 
 class DescriptorExtractorTool(ForensicsTool):
 
     tool_id = "descriptor_extractor"
     title = "Descriptor extractor"
-    category = "Set 5"
+    category = "Set 5 duties"
     description = "Extract ORB or SIFT keypoints."
 
     def run(
@@ -24,29 +28,24 @@ class DescriptorExtractorTool(ForensicsTool):
     ) -> ToolResult | None:
         assert document.current is not None
 
-        method = simpledialog.askstring(
+        index = ask_choice(
+            parent,
             "Descriptor extractor",
-            "Choose ORB or SIFT:",
-            parent=parent,
-            initialvalue="ORB",
+            "Which descriptor do you want to use?",
+            DESCRIPTORS,
         )
 
-        if method is None:
+        if index is None:
             return None
-        method = method.strip().upper()
-
-        if method not in ("ORB", "SIFT"):
-            return ToolResult(
-                message="Choose ORB or SIFT",
-            )
+        method = DESCRIPTORS[index]
 
         image = document.current.convert("L")
         image_array = np.asarray(image, dtype=np.float32) / 255.0
 
         # Configure the selected descriptor extractor.
-        if method == "ORB":
+        if method == ORB:
             n_keypoints = simpledialog.askinteger(
-                "ORB",
+                ORB,
                 "Maximum number of keypoints.",
                 parent=parent,
                 initialvalue=200,
@@ -55,11 +54,11 @@ class DescriptorExtractorTool(ForensicsTool):
             if n_keypoints is None:
                 return None
 
-            extractor = ORB(n_keypoints=n_keypoints)
+            extractor = feature.ORB(n_keypoints=n_keypoints)
 
         else:
             n_octaves = simpledialog.askinteger(
-                "SIFT",
+                SIFT,
                 "Number of octaves:",
                 parent=parent,
                 initialvalue=8,
@@ -70,7 +69,7 @@ class DescriptorExtractorTool(ForensicsTool):
                 return None
 
             n_scales = simpledialog.askinteger(
-                "SIFT",
+                SIFT,
                 "Number of scales:",
                 parent=parent,
                 initialvalue=3,
@@ -81,7 +80,7 @@ class DescriptorExtractorTool(ForensicsTool):
                 return None
 
             sigma_min = simpledialog.askfloat(
-                "SIFT",
+                SIFT,
                 "Minimum sigma:",
                 parent=parent,
                 initialvalue=1.6,
@@ -91,7 +90,7 @@ class DescriptorExtractorTool(ForensicsTool):
             if sigma_min is None:
                 return None
 
-            extractor = SIFT(
+            extractor = feature.SIFT(
                 n_octaves=n_octaves,
                 n_scales=n_scales,
                 sigma_min=sigma_min,
@@ -101,7 +100,8 @@ class DescriptorExtractorTool(ForensicsTool):
             extractor.detect_and_extract(image_array)
         except (RuntimeError, ValueError):
             return ToolResult(
-                message="No keypoints could be detected. Try another image or configuration",
+                message="No keypoints could be detected. "
+                "Try another image or configuration.",
             )
         keypoints = extractor.keypoints
         descriptors = extractor.descriptors

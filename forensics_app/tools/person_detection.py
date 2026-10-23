@@ -126,7 +126,7 @@ def ask_step(parent: tk.Misc, maximum: int) -> int | None:
 class PersonDetectionTool(ForensicsTool):
     tool_id = "person_detection"
     title = "Person detection (HOG)"
-    category = "Set 4"
+    category = "Set 4 duties"
     description = "Find a person by comparing HOG descriptors of sliding windows."
 
     def run(

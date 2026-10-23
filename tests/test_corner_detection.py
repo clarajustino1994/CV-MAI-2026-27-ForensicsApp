@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import unittest
@@ -9,7 +8,6 @@ from PIL import Image
 
 from forensics_app.core import ImageDocument
 from forensics_app.tools.corner_detection import CornerDetectionTool
-
 
 MODULE = "forensics_app.tools.corner_detection"
 
@@ -39,8 +37,8 @@ class CornerDetectionTests(unittest.TestCase):
 
         with (
             mock.patch(
-                f"{MODULE}.simpledialog.askstring",
-                return_value="FAST",
+                f"{MODULE}.ask_choice",
+                return_value=0,
             ),
             mock.patch(
                 f"{MODULE}.simpledialog.askfloat",
@@ -65,8 +63,8 @@ class CornerDetectionTests(unittest.TestCase):
 
         with (
             mock.patch(
-                f"{MODULE}.simpledialog.askstring",
-                return_value="HARRIS",
+                f"{MODULE}.ask_choice",
+                return_value=1,
             ),
             mock.patch(
                 f"{MODULE}.simpledialog.askfloat",

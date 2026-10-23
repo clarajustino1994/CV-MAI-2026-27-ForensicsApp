@@ -5,7 +5,7 @@ from __future__ import annotations
 import tkinter as tk
 from dataclasses import dataclass
 from itertools import cycle
-from tkinter import filedialog, simpledialog
+from tkinter import filedialog, messagebox, simpledialog
 
 import numpy as np
 from PIL import Image, ImageDraw
@@ -14,9 +14,8 @@ from skimage import feature, measure, transform
 from forensics_app.core import ImageDocument
 
 from .base import ForensicsTool, ToolResult
+from .constants import DESCRIPTORS, ORB, SIFT
 from .dialogs import ask_choice
-
-DESCRIPTORS = ("ORB", "SIFT")
 
 # Big photos are shrunk so that SIFT runs in seconds instead of minutes
 WORKING_SIZE = 640
@@ -40,7 +39,7 @@ KEYPOINT_RADIUS = 3
 
 @dataclass(frozen=True)
 class DescriptorParams:
-    kind: str = "ORB"
+    kind: str = ORB
     n_keypoints: int = 500  # ORB
     n_octaves: int = 8  # SIFT
     n_scales: int = 3  # SIFT
@@ -49,7 +48,7 @@ class DescriptorParams:
     @property
     def metric(self) -> str:
         # ORB gives binary strings, SIFT gives real-valued histograms
-        return "hamming" if self.kind == "ORB" else "euclidean"
+        return "hamming" if self.kind == ORB else "euclidean"
 
 
 @dataclass(frozen=True)
@@ -67,7 +66,7 @@ class Features:
 
 def default_ratio(kind: str) -> float:
     # Hamming distances of ORB are coarse, so the ratio test needs more room
-    return 0.9 if kind == "ORB" else 0.8
+    return 0.9 if kind == ORB else 0.8
 
 
 def to_gray(image: Image.Image, size: int = WORKING_SIZE) -> Image.Image:
@@ -77,7 +76,7 @@ def to_gray(image: Image.Image, size: int = WORKING_SIZE) -> Image.Image:
 
 
 def make_extractor(params: DescriptorParams) -> feature.ORB | feature.SIFT:
-    if params.kind == "ORB":
+    if params.kind == ORB:
         return feature.ORB(n_keypoints=params.n_keypoints)
     return feature.SIFT(
         n_octaves=params.n_octaves,
@@ -180,12 +179,14 @@ def draw_matches(
 
 
 def ask_descriptor_params(parent: tk.Misc, title: str) -> DescriptorParams | None:
-    choice = ask_choice(parent, title, "Descriptor:", DESCRIPTORS)
+    choice = ask_choice(
+        parent, title, "Which descriptor do you want to use?", DESCRIPTORS
+    )
     if choice is None:
         return None
     defaults = DescriptorParams()
 
-    if DESCRIPTORS[choice] == "ORB":
+    if DESCRIPTORS[choice] == ORB:
         n_keypoints = simpledialog.askinteger(
             title,
             "Number of ORB keypoints:",
@@ -196,7 +197,7 @@ def ask_descriptor_params(parent: tk.Misc, title: str) -> DescriptorParams | Non
         )
         if n_keypoints is None:
             return None
-        return DescriptorParams(kind="ORB", n_keypoints=n_keypoints)
+        return DescriptorParams(kind=ORB, n_keypoints=n_keypoints)
 
     n_octaves = simpledialog.askinteger(
         title,
@@ -232,7 +233,7 @@ def ask_descriptor_params(parent: tk.Misc, title: str) -> DescriptorParams | Non
         return None
 
     return DescriptorParams(
-        kind="SIFT", n_octaves=n_octaves, n_scales=n_scales, sigma_min=sigma_min
+        kind=SIFT, n_octaves=n_octaves, n_scales=n_scales, sigma_min=sigma_min
     )
 
 
@@ -258,6 +259,13 @@ def ask_match_params(parent: tk.Misc, title: str, kind: str) -> MatchParams | No
 
 
 def ask_second_image_path(parent: tk.Misc) -> str:
+    messagebox.showinfo(
+        "Choose the second image",
+        "Select the image whose keypoints you want to match "
+        "against the current image.\n\n"
+        "Supported formats: PNG, JPG, JPEG, BMP, TIF and TIFF.",
+        parent=parent,
+    )
     return filedialog.askopenfilename(
         parent=parent,
         title="Choose the second image",
@@ -269,10 +277,10 @@ def ask_second_image_path(parent: tk.Misc) -> str:
 
 
 def descriptor_details(params: DescriptorParams) -> dict[str, object]:
-    if params.kind == "ORB":
-        return {"Descriptor": "ORB", "Keypoints requested": params.n_keypoints}
+    if params.kind == ORB:
+        return {"Descriptor": ORB, "Keypoints requested": params.n_keypoints}
     return {
-        "Descriptor": "SIFT",
+        "Descriptor": SIFT,
         "Octaves": params.n_octaves,
         "Scales per octave": params.n_scales,
         "Sigma min": params.sigma_min,
@@ -292,7 +300,7 @@ def match_details(
 class FeatureMatchingTool(ForensicsTool):
     tool_id = "feature_matching"
     title = "Keypoint matching"
-    category = "Set 5"
+    category = "Set 5 duties"
     description = "Match ORB or SIFT keypoints with a second image."
 
     def run(

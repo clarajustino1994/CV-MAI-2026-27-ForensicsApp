@@ -4,21 +4,22 @@ import tkinter as tk
 from tkinter import simpledialog
 
 import numpy as np
+from matplotlib import colormaps
 from PIL import Image, ImageDraw
-from skimage.feature import corner_harris, corner_peaks, corner_fast
+from skimage.feature import corner_fast, corner_harris, corner_peaks
 
 from forensics_app.core import ImageDocument
+
 from .base import ForensicsTool, ToolResult
-from io import BytesIO
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
+from .constants import CORNER_METHODS, FAST
+from .dialogs import ask_choice
+
 
 class CornerDetectionTool(ForensicsTool):
 
     tool_id = "corner_detection"
     title = "Corner Detection"
-    category = "Set 5"
+    category = "Set 5 duties"
     description = "Detect corners using FAST or Harris."
 
     def run(
@@ -28,22 +29,18 @@ class CornerDetectionTool(ForensicsTool):
     ) -> ToolResult | None:
         assert document.current is not None
 
-        method = simpledialog.askstring(
-            "Corner Detection",
-            "Detection method: Fast or Harris.",
-            parent=parent,
-            initialvalue="FAST",
+        index = ask_choice(
+            parent,
+            "Corner detection",
+            "Which detection method do you want to use?",
+            CORNER_METHODS,
         )
 
-        if method is None:
+        if index is None:
             return None
 
-        method = method.strip().lower()
+        method = CORNER_METHODS[index]
 
-        if method not in ("fast", "harris"):
-            return ToolResult(
-                message="Choose FAST or HARRIS",
-            )
         peak_threshold = simpledialog.askfloat(
             "Corner detection",
             "Peak threshold (0 to 1):",
@@ -60,8 +57,8 @@ class CornerDetectionTool(ForensicsTool):
         image = document.current.convert("L")
         image_array = np.asarray(image, dtype=np.float32) / 255.0
 
-        #Calculate the corner response.
-        if method == "fast":
+        # Calculate the corner response.
+        if method == FAST:
             response = corner_fast(image_array)
         else:
             response = corner_harris(image_array)
@@ -71,33 +68,12 @@ class CornerDetectionTool(ForensicsTool):
             threshold_rel=peak_threshold,
         )
 
-        # Create the FAST/Harris response map with the same image size.
-        fig, ax = plt.subplots(
-            figsize=(image.width / 100, image.height / 100),
-            dpi=100
-        )
-        ax.imshow(response, cmap="viridis")
-        ax.axis("off")
-        fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
-
-        buffer = BytesIO()
-        fig.savefig(
-            buffer,
-            format="png",
-            dpi=100,
-            bbox_inches=None,
-            pad_inches=0
-        )
-        plt.close(fig)
-        buffer.seek(0)
-        response_image = Image.open(buffer).convert("RGB")
-        buffer.close()
-
-        #Make both images exactly the same size
-        response_image = response_image.resize(
-            (image.width, image.height),
-            Image.Resampling.LANCZOS,
-        )
+        # Colour the FAST/Harris response with viridis, stretched to its own
+        # min..max like imshow does, so it has exactly the image size.
+        low, high = float(response.min()), float(response.max())
+        scaled = (response - low) / (high - low) if high > low else response * 0
+        colours = colormaps["viridis"](scaled)[..., :3]
+        response_image = Image.fromarray((colours * 255).astype(np.uint8))
 
         # Draw the detected corners in red.
         result_image = document.current.convert("L").convert("RGB")
@@ -118,16 +94,15 @@ class CornerDetectionTool(ForensicsTool):
         )
 
         combined_image.paste(response_image, (0, 0))
-        combined_image.paste(result_image,(0, image.height))
+        combined_image.paste(result_image, (0, image.height))
 
         return ToolResult(
             image=combined_image,
-            message=f"{len(points)} corners detected using {method.upper()}.",
+            message=f"{len(points)} corners detected using {method}.",
             details={
                 "Operation": "Corner detection",
-                "Method": method.upper(),
+                "Method": method,
                 "Peak threshold": f"{peak_threshold:.2f}",
                 "Number of peaks": len(points),
-            }
+            },
         )
-
