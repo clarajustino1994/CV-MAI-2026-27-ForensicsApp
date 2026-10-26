@@ -14,7 +14,7 @@ from skimage import feature, measure, transform
 from forensics_app.core import ImageDocument
 
 from .base import ForensicsTool, ToolResult
-from .constants import DESCRIPTORS, ORB, SIFT
+from .constants import DESCRIPTORS, ORB, SIFT, SIFT_MIN_SIGMA
 from .dialogs import ask_choice
 
 # Big photos are shrunk so that SIFT runs in seconds instead of minutes
@@ -226,7 +226,7 @@ def ask_descriptor_params(parent: tk.Misc, title: str) -> DescriptorParams | Non
         "Blur of the first scale (sigma_min):",
         parent=parent,
         initialvalue=defaults.sigma_min,
-        minvalue=0.5,
+        minvalue=SIFT_MIN_SIGMA,
         maxvalue=5.0,
     )
     if sigma_min is None:
@@ -246,7 +246,7 @@ def ask_match_params(parent: tk.Misc, title: str, kind: str) -> MatchParams | No
 
     max_ratio = simpledialog.askfloat(
         title,
-        "Maximum distance ratio, closest / second closest (1 = no ratio test):",
+        "Maximum ratio, one number from 0.1 to 1 (enter 1 to turn the test off):",
         parent=parent,
         initialvalue=default_ratio(kind),
         minvalue=0.1,

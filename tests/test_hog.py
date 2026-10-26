@@ -8,6 +8,7 @@ from PIL import Image
 
 from forensics_app.core import ImageDocument
 from forensics_app.tools.hog import HogParams, HogTool, compute_hog, hog_descriptor
+from forensics_app.tools.matching_configs import PANEL_GAP
 from forensics_app.tools.person_detection import (
     DOT_PRODUCT_COLOR,
     EUCLIDEAN_COLOR,
@@ -152,7 +153,12 @@ class PersonDetectionTests(unittest.TestCase):
             mock.patch(f"{PERSON_MODULE}.ask_step", return_value=8),
         ):
             result = PersonDetectionTool().run(None, document)
-        self.assertEqual(result.image.size, self.scene.size)
+        # Detections, then the template and its HOG enlarged to the scene height
+        template_width = round(self.patch.width * self.scene.height / self.patch.height)
+        self.assertEqual(
+            result.image.size,
+            (self.scene.width + 2 * (template_width + PANEL_GAP), self.scene.height),
+        )
         self.assertEqual(result.image.getpixel((24, 16)), EUCLIDEAN_COLOR)
         self.assertEqual(result.details["Window size"], "32x48")
         self.assertEqual(result.details["Step"], "8 px")

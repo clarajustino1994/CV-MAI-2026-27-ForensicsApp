@@ -10,7 +10,7 @@ from skimage import feature
 from forensics_app.core import ImageDocument
 
 from .base import ForensicsTool, ToolResult
-from .constants import DESCRIPTORS, ORB, SIFT
+from .constants import DESCRIPTORS, ORB, SIFT, SIFT_MIN_SIGMA
 from .dialogs import ask_choice
 
 
@@ -84,7 +84,7 @@ class DescriptorExtractorTool(ForensicsTool):
                 "Minimum sigma:",
                 parent=parent,
                 initialvalue=1.6,
-                minvalue=0.1,
+                minvalue=SIFT_MIN_SIGMA,
             )
 
             if sigma_min is None:
