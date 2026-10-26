@@ -34,7 +34,7 @@ def hog_descriptor(image: Image.Image | np.ndarray, params: HogParams) -> np.nda
         orientations=params.orientations,
         pixels_per_cell=(params.pixels_per_cell, params.pixels_per_cell),
         cells_per_block=(params.cells_per_block, params.cells_per_block),
-        channel_axis=-1,
+        channel_axis=-1,  # the last axis is the colour channel, not the spatial axes
     )
 
 

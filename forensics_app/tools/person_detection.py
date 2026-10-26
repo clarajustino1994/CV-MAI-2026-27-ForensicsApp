@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import tkinter as tk
 from dataclasses import dataclass
-from tkinter import filedialog, simpledialog
+from tkinter import filedialog, messagebox, simpledialog
 
 import numpy as np
 from PIL import Image, ImageDraw
@@ -95,6 +95,15 @@ def draw_detections(
 
 
 def ask_template_path(parent: tk.Misc) -> str:
+    messagebox.showinfo(
+        "Choose a person template",
+        "Select a small image that contains only one person, "
+        "for example a crop of a pedestrian.\n\n"
+        "A window of the same size slides over the current image and the "
+        "most similar HOG descriptor marks the detected person.\n\n"
+        "Supported formats: PNG, JPG, JPEG, BMP, TIF and TIFF.",
+        parent=parent,
+    )
     return filedialog.askopenfilename(
         parent=parent,
         title="Choose person template",

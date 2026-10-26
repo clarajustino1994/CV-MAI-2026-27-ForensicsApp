@@ -118,7 +118,7 @@ class MatchingConfigsTool(ForensicsTool):
         # Thresholded image: every pixel whose correlation exceeds the threshold
         mask = correlation >= threshold
         # Each connected group of pixels above the threshold is one match
-        _labels, n_matches = ndimage.label(mask)
+        _, n_matches = ndimage.label(mask)
 
         # Rotated template | normalized cross-correlation | thresholded image
         panel = side_by_side(

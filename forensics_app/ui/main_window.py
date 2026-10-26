@@ -244,6 +244,10 @@ class MainWindow:
             self.document.apply(result.image)
         self._show_details(result.details)
         self.status.set(result.message)
+        # A result with only a message is a warning (e.g. the parameters do not
+        # fit the image): show it in a pop-up so it is not missed
+        if result.image is None and not result.details:
+            messagebox.showwarning(tool.title, result.message, parent=self.root)
         self._refresh()
 
     def undo(self) -> None:
