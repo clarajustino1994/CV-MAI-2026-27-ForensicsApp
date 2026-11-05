@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox
@@ -11,42 +12,76 @@ from forensics_app.core import ImageDocument
 from .base import ForensicsTool, ToolResult
 
 
+def get_surname(name: str) -> str:
+    """Return only the surname of a person."""
+    return str(name).split()[-1]
+
+
 def create_gallery(
-    test_image: Image.Image,
-    train_images: list[Image.Image],
-    names: list[str],
-    distances: list[float],
+    images: list[Image.Image],
+    titles: list[str],
+    columns: int = 4,
 ) -> Image.Image:
-    #Display the test image and its three closest training images.
+    """Display the test image and its three closest training images."""
 
-    images = [test_image] + train_images
-    titles = ["Test image"] + [
-        f"{name}\nDistance: {distance:.3f}"
-        for name, distance in zip(names, distances)
-    ]
+    cell_width = 180
+    cell_height = 220
+    rows = 1
 
-    cell_width = 160
-    cell_height = 210
+    canvas = Image.new(
+        "RGB",
+        (columns * cell_width, rows * cell_height),
+        "white",
+    )
 
-    canvas = Image.new("RGB", (cell_width * len(images), cell_height), "white")
     draw = ImageDraw.Draw(canvas)
 
-    for index, (image, title) in enumerate(zip(images, titles)):
-        image = image.convert("L").convert("RGB").resize((120, 150))
+    for index, image in enumerate(images[:columns]):
 
         x = index * cell_width
+        y = 0
 
-        canvas.paste(image, (x + 20, 35))
-        draw.text((x + 10, 10), title, fill="black")
+        image = image.convert("L").convert("RGB").resize((120, 150))
+
+        # Display face image
+        canvas.paste(image, (x + 30, y + 55))
+
+        # Add a thin black border
+        draw.rectangle(
+            (x + 30, y + 55, x + 149, y + 204),
+            outline="black",
+            width=1,
+        )
+
+        # Center the title
+        text_box = draw.multiline_textbbox(
+            (0, 0),
+            titles[index],
+            align="center",
+        )
+
+        text_width = text_box[2] - text_box[0]
+
+        text_x = (
+            x + (cell_width - text_width) // 2 - text_box[0]
+        )
+
+        draw.multiline_text(
+            (text_x, y + 5),
+            titles[index],
+            fill="black",
+            align="center",
+        )
 
     return canvas
 
 
 class FaceRecognitionTool(ForensicsTool):
+
     tool_id = "face_recognition"
     title = "Face recognition"
     category = "Set 6 duties"
-    description = "Find the closest training faces using Eigenfaces."
+    description = "Recognize faces using Eigenfaces, PCA and Euclidean distance."
     requires_image = False
 
     def run(
@@ -57,113 +92,158 @@ class FaceRecognitionTool(ForensicsTool):
 
         messagebox.showinfo(
             "Face recognition",
-            "Select the output folder created by the Eigenface builder.",
+            "Select one test image from the test folder.",
             parent=parent,
         )
 
-        folder = filedialog.askdirectory(
+        image_path = filedialog.askopenfilename(
             parent=parent,
-            title="Select Eigenface dataset folder",
+            title="Select test image",
+            filetypes=[
+                ("Images", "*.jpg *.jpeg *.png"),
+            ],
         )
 
-        if not folder:
+        if not image_path:
             return None
 
-        output = Path(folder)
-        model_folder = output / "model"
-        test_folder = output / "test"
-
         try:
-            # Load the saved PCA model and training data
-            mean_face = np.load(model_folder / "mean_face.npy")
-            eigenfaces = np.load(model_folder / "eigenfaces.npy")
+            image_path = Path(image_path)
+            output = image_path.parent.parent
+
+            model_folder = output / "model"
+            train_folder = output / "train"
+
+            # Get the test image index from its filename
+            match = re.search(
+                r"test_(\d+)",
+                image_path.stem,
+            )
+
+            if not match:
+                raise ValueError(
+                    "The selected image must have a name such as test_0000.jpg."
+                )
+
+            test_index = int(match.group(1))
+
+            # Load saved PCA coefficients and labels
             train_coefficients = np.load(
                 model_folder / "train_coefficients.npy"
             )
-            train_labels = np.load(model_folder / "train_labels.npy")
+
+            test_coefficients = np.load(
+                model_folder / "test_coefficients.npy"
+            )
+
+            train_labels = np.load(
+                model_folder / "train_labels.npy"
+            )
+
+            test_labels = np.load(
+                model_folder / "test_labels.npy"
+            )
+
             target_names = np.load(
                 model_folder / "target_names.npy",
                 allow_pickle=True,
             )
 
-            # Select one image from the test folder
-            filename = filedialog.askopenfilename(
-                parent=parent,
-                title="Select a test face",
-                initialdir=str(test_folder),
-                filetypes=[
-                    ("Image files", "*.jpg *.jpeg *.png"),
-                ],
-            )
+            # Check the selected test image index
+            if test_index >= len(test_coefficients):
+                raise ValueError(
+                    "The selected test image does not exist in the saved PCA coefficients."
+                )
 
-            if not filename:
-                return None
+            # Get the PCA coefficients of the test image
+            test_vector = test_coefficients[test_index]
 
-            test_image = Image.open(filename).convert("L")
-
-            # Resize the test image to the model dimensions
-            height, width = mean_face.shape
-            test_image = test_image.resize((width, height))
-
-            # Convert pixels to a normalized vector
-            test_array = np.asarray(test_image, dtype=np.float64) / 255.0
-            test_vector = test_array.reshape(-1)
-
-            # Project the test image into the Eigenfaces space
-            components = eigenfaces.reshape(len(eigenfaces), -1)
-            test_coefficients = components @ (
-                test_vector - mean_face.reshape(-1)
-            )
-
-            # Calculate Euclidean distances to training images
+            # Calculate Euclidean distances to all training images
             distances = np.linalg.norm(
-                train_coefficients - test_coefficients,
+                train_coefficients - test_vector,
                 axis=1,
             )
 
             # Find the three closest training images
             nearest_indices = np.argsort(distances)[:3]
 
-            train_images = []
-            names = []
-            nearest_distances = []
+            # Get the real identity of the test image
+            true_name = get_surname(
+                target_names[int(test_labels[test_index])]
+            )
 
-            for index in nearest_indices:
-                image_path = (
-                    output / "train" / f"train_{index:04d}.jpg"
+            # The closest neighbour gives the predicted identity
+            predicted_name = get_surname(
+                target_names[int(train_labels[nearest_indices[0]])]
+            )
+
+            # Load the test image
+            images = [
+                Image.open(image_path).convert("L")
+            ]
+
+            titles = [
+                f"TEST\npredicted: {predicted_name}\ntrue: {true_name}"
+            ]
+
+            # Load the three closest training images
+            for position, train_index in enumerate(nearest_indices):
+
+                train_image_path = (
+                    train_folder / f"train_{train_index:04d}.jpg"
                 )
 
-                train_images.append(Image.open(image_path).convert("L"))
+                train_image = Image.open(
+                    train_image_path
+                ).convert("L")
 
-                label = int(train_labels[index])
-                names.append(str(target_names[label]))
-                nearest_distances.append(float(distances[index]))
+                images.append(train_image)
 
-            # Create the result gallery
+                train_name = get_surname(
+                    target_names[int(train_labels[train_index])]
+                )
+
+                distance = distances[train_index]
+
+                titles.append(
+                    f"Nearest {position + 1}\n"
+                    f"name: {train_name}\n"
+                    f"distance: {distance:.2f}"
+                )
+
+            # Create the gallery
             result_image = create_gallery(
-                test_image,
-                train_images,
-                names,
-                nearest_distances,
+                images,
+                titles,
             )
 
             return ToolResult(
                 image=result_image,
-                message="Face recognition completed successfully.",
+                message=(
+                    f"Face recognition completed. "
+                    f"Predicted: {predicted_name}. "
+                    f"True: {true_name}."
+                ),
                 details={
-                    "Operation": "Face recognition with Eigenfaces",
-                    "Test image": Path(filename).name,
-                    "Closest person": names[0],
-                    "Closest distance": f"{nearest_distances[0]:.4f}",
-                    "Images compared": len(train_coefficients),
-                    "Neighbors displayed": len(nearest_indices),
+                    "Operation": "Eigenfaces face recognition",
+                    "Method": "PCA + Euclidean distance",
+                    "Test image": image_path.name,
+                    "Predicted identity": predicted_name,
+                    "True identity": true_name,
+                    "Closest training images": 3,
+                    "Distances": [
+                        f"{distances[i]:.2f}"
+                        for i in nearest_indices
+                    ],
                 },
             )
 
         except Exception as error:
+
             messagebox.showerror(
                 "Face recognition error",
                 str(error),
                 parent=parent,
             )
+
             return None
