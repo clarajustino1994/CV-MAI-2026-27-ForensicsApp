@@ -61,9 +61,23 @@ def visualize_eigenfaces(eigenfaces: np.ndarray, k: int) -> Image.Image:
 
         x = (index % 4) * cell_width
         y = (index // 4) * cell_height
-
+        # Display eigenface image
         canvas.paste(face_image, (x + 15, y + 25))
-        draw.text((x + 15, y + 5), f"Eigenface {index}", fill="black")
+
+        # Add a thin black border around the image
+        draw.rectangle(
+            (x + 15, y + 25, x + 134, y + 174),
+            outline="black",
+            width=1,
+        )
+
+        label = f"Eigenface {index}"
+
+        text_width = draw.textbbox((0, 0), label)[2]
+
+        text_x = x + (cell_width - text_width) // 2
+
+        draw.text((text_x, y + 5), label, fill="black")
 
     return canvas
 
