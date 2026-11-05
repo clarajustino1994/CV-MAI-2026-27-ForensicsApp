@@ -20,11 +20,18 @@ from .matching_configs import MatchingConfigsTool
 from .person_detection import PersonDetectionTool
 from .registry import ToolRegistry
 from .sharpening import SharpeningTool
+from .face_detection import FaceDetectionTool
+from .eigenface_builder import EigenfaceBuilderTool
+from .face_recognition import FaceRecognitionTool
 
 
 def build_tool_registry() -> ToolRegistry:
     return ToolRegistry(
         [
+            # Set 6
+            FaceRecognitionTool(),
+            EigenfaceBuilderTool(),
+            FaceDetectionTool(),
             # Set 5
             CornerDetectionTool(),
             DescriptorExtractorTool(),
