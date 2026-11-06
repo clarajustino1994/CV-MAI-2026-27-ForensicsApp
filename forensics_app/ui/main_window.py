@@ -240,16 +240,35 @@ class MainWindow:
         if result is None:
             self.status.set(f"Cancelled {tool.title}.")
             return
+        # Display the result image.
         if result.image is not None:
-            self.document.apply(result.image)
-        self._show_details(result.details)
-        self.status.set(result.message)
-        # A result with only a message is a warning (e.g. the parameters do not
-        # fit the image): show it in a pop-up so it is not missed
-        if result.image is None and not result.details:
-            messagebox.showwarning(tool.title, result.message, parent=self.root)
-        self._refresh()
 
+            # If an original image is loaded, apply the result to the document.
+            if self.document.is_loaded:
+                self.document.apply(result.image)
+
+                # Refresh the interface to display the updated document.
+                self._refresh()
+
+            else:
+                # If no original image is loaded, display the result directly.
+                # This is useful for tools such as Face Recognition,
+                # which generate their own gallery without requiring an input image.
+                self.image_view.show(result.image)
+
+        # Display the properties and information returned by the tool.
+        self._show_details(result.details)
+
+        # Update the status bar with the operation result.
+        self.status.set(result.message)
+
+        # Show a warning if the tool returns neither an image nor details.
+        if result.image is None and not result.details:
+            messagebox.showwarning(
+                tool.title,
+                result.message,
+                parent=self.root,
+            )
     def undo(self) -> None:
         if self.document.undo():
             self.status.set("Undid the last image operation.")
