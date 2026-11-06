@@ -1,88 +1,113 @@
-from __future__ import annotations
-
-import tempfile
-import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest import mock
+from unittest.mock import patch
 
 import numpy as np
 
-from forensics_app.core import ImageDocument
 from forensics_app.tools.eigenface_builder import EigenfaceBuilderTool
 
-MODULE = "forensics_app.tools.eigenface_builder"
+class TestEigenfaceBuilder:
 
+    def create_dataset(self):
+        rng = np.random.RandomState(42)
 
-def make_dataset():
-    """Create a small synthetic face dataset for testing."""
-    images = np.random.RandomState(42).rand(8, 8, 8).astype(np.float32)
-    labels = np.array([0, 0, 0, 0, 1, 1, 1, 1])
+        images = rng.rand(12, 8, 8).astype(np.float32)
+        labels = np.array([0] * 6 + [1] * 6)
 
-    return SimpleNamespace(
-        images=images,
-        target=labels,
-        target_names=np.array(["Person A", "Person B"]),
-    )
+        return SimpleNamespace(
+            images=images,
+            data=images.reshape(12, -1),
+            target=labels,
+            target_names=np.array(["Person A", "Person B"]),
+        )
 
+    @patch("forensics_app.tools.eigenface_builder.messagebox.showerror")
+    @patch("forensics_app.tools.eigenface_builder.simpledialog.askinteger")
+    @patch("forensics_app.tools.eigenface_builder.filedialog.askdirectory")
+    @patch("forensics_app.tools.eigenface_builder.messagebox.showinfo")
+    @patch("forensics_app.tools.eigenface_builder.fetch_lfw_people")
+    def test_builds_eigenface_model(
+        self,
+        mock_fetch,
+        mock_showinfo,
+        mock_directory,
+        mock_askinteger,
+        mock_showerror,
+        tmp_path,
+        monkeypatch,
+    ):
+        output = tmp_path / "eigenface_output"
+        output.mkdir()
 
-class EigenfaceBuilderTests(unittest.TestCase):
+        mock_fetch.return_value = self.create_dataset()
+        mock_directory.return_value = str(output)
+        mock_askinteger.return_value = 3
 
-    def test_builds_eigenface_model(self) -> None:
-        document = ImageDocument()
+        # Restore the original SSL context after the test.
+        import ssl
+        original_ssl = ssl._create_default_https_context
+        monkeypatch.setattr(
+            ssl,
+            "_create_default_https_context",
+            original_ssl,
+        )
 
-        with tempfile.TemporaryDirectory() as temp_dir:
-            with (
-                mock.patch(
-                    f"{MODULE}.messagebox.showinfo"
-                ),
-                mock.patch(
-                    f"{MODULE}.filedialog.askdirectory",
-                    return_value=temp_dir,
-                ),
-                mock.patch(
-                    f"{MODULE}.fetch_lfw_people",
-                    return_value=make_dataset(),
-                ),
-                mock.patch(
-                    f"{MODULE}.simpledialog.askinteger",
-                    return_value=2,
-                ),
-            ):
-                result = EigenfaceBuilderTool().run(None, document)
+        tool = EigenfaceBuilderTool()
+        result = tool.run(None, None)
 
-            self.assertIsNotNone(result)
-            self.assertIsNotNone(result.image)
-            self.assertEqual(result.details["Operation"], "Eigenface builder")
-            self.assertEqual(result.details["Dataset"], "LFW People")
-            self.assertEqual(result.details["Eigenfaces"], 2)
+        assert result is not None
+        assert result.details["Operation"] == "Eigenface builder"
+        assert result.details["Dataset"] == "LFW People"
+        assert result.details["Eigenfaces"] == 3
+        assert result.details["Eigenfaces shown"] == 3
 
-            model_folder = Path(temp_dir) / "model"
+        # Check generated folders.
+        assert (output / "train").is_dir()
+        assert (output / "test").is_dir()
+        assert (output / "model").is_dir()
 
-            self.assertTrue((model_folder / "mean_face.npy").exists())
-            self.assertTrue((model_folder / "eigenfaces.npy").exists())
-            self.assertTrue((model_folder / "train_coefficients.npy").exists())
-            self.assertTrue((model_folder / "test_coefficients.npy").exists())
-            self.assertTrue((Path(temp_dir) / "image_labels.csv").exists())
+        # Check saved images and CSV.
+        assert (output / "image_labels.csv").exists()
+        assert len(list((output / "train").glob("*.jpg"))) == 9
+        assert len(list((output / "test").glob("*.jpg"))) == 3
 
-    def test_cancelled_folder_selection(self) -> None:
-        document = ImageDocument()
+        # Check saved PCA model files.
+        model = output / "model"
 
-        with (
-            mock.patch(f"{MODULE}.messagebox.showinfo"),
-            mock.patch(
-                f"{MODULE}.filedialog.askdirectory",
-                return_value="",
-            ),
-            mock.patch(
-                f"{MODULE}.fetch_lfw_people"
-            ) as fetch_dataset,
-        ):
-            result = EigenfaceBuilderTool().run(None, document)
+        expected_files = [
+            "mean_face.npy",
+            "eigenfaces.npy",
+            "train_coefficients.npy",
+            "test_coefficients.npy",
+            "train_labels.npy",
+            "test_labels.npy",
+            "target_names.npy",
+            "explained_variance_ratio.npy",
+        ]
 
-        self.assertIsNone(result)
-        fetch_dataset.assert_not_called()
+        for filename in expected_files:
+            assert (model / filename).exists()
 
+        # Check eigenface dimensions.
+        eigenfaces = np.load(model / "eigenfaces.npy")
+        assert eigenfaces.shape == (3, 8, 8)
 
-if __name__ == "__main__":
-    unittest.main()
+        # Check visualization.
+        assert (output / "eigenfaces.png").exists()
+        assert result.image is not None
+
+        mock_showerror.assert_not_called()
+
+    @patch("forensics_app.tools.eigenface_builder.filedialog.askdirectory")
+    @patch("forensics_app.tools.eigenface_builder.messagebox.showinfo")
+    def test_cancelled_folder_selection(
+        self,
+        mock_showinfo,
+        mock_directory,
+    ):
+        mock_directory.return_value = ""
+
+        tool = EigenfaceBuilderTool()
+        result = tool.run(None, None)
+
+        assert result is None
