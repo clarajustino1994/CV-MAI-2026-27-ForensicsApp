@@ -16,90 +16,159 @@ MODULE = "forensics_app.tools.face_recognition"
 
 class FaceRecognitionTests(unittest.TestCase):
 
-    def test_recognizes_closest_faces(self) -> None:
+    def test_recognizes_faces(self) -> None:
 
         with tempfile.TemporaryDirectory() as temp_dir:
             output = Path(temp_dir)
 
             model_folder = output / "model"
-            train_folder = output / "train"
             test_folder = output / "test"
 
             model_folder.mkdir()
-            train_folder.mkdir()
             test_folder.mkdir()
 
-            # Create a small synthetic PCA model
-            np.save(model_folder / "mean_face.npy", np.zeros((2, 2)))
-            np.save(
-                model_folder / "eigenfaces.npy",
-                np.array([
-                    [[1, 0], [0, 0]],
-                    [[0, 1], [0, 0]],
-                ]),
-            )
+            # Create synthetic training coefficients for two people.
+            train_coefficients = np.array([
+                [-1.0, -1.0],
+                [-1.1, -0.9],
+                [-0.9, -1.1],
+                [-1.2, -1.0],
+                [-0.8, -0.9],
+                [1.0, 1.0],
+                [1.1, 0.9],
+                [0.9, 1.1],
+                [1.2, 1.0],
+                [0.8, 0.9],
+            ])
+
+            train_labels = np.array([
+                0, 0, 0, 0, 0,
+                1, 1, 1, 1, 1,
+            ])
+
+            test_coefficients = np.array([
+                [-1.0, -0.9],
+                [1.0, 0.9],
+            ])
+
+            test_labels = np.array([0, 1])
+
+            # Save the synthetic PCA model.
             np.save(
                 model_folder / "train_coefficients.npy",
-                np.array([
-                    [0.1, 0.2],
-                    [0.3, 0.4],
-                    [0.5, 0.6],
-                ]),
+                train_coefficients,
             )
+
+            np.save(
+                model_folder / "test_coefficients.npy",
+                test_coefficients,
+            )
+
             np.save(
                 model_folder / "train_labels.npy",
-                np.array([0, 1, 0]),
+                train_labels,
             )
+
+            np.save(
+                model_folder / "test_labels.npy",
+                test_labels,
+            )
+
             np.save(
                 model_folder / "target_names.npy",
                 np.array(["Person A", "Person B"]),
             )
 
-            # Create three training images
-            for index in range(3):
-                image = Image.new("L", (2, 2), color=100 + index * 20)
-                image.save(train_folder / f"train_{index:04d}.jpg")
+            # Create the corresponding test images.
+            for index in range(2):
+                image = Image.new(
+                    "L",
+                    (20, 20),
+                    color=100 + index * 50,
+                )
 
-            # Create one test image
-            test_path = test_folder / "test_0001.jpg"
-            Image.new("L", (2, 2), color=120).save(test_path)
+                image.save(
+                    test_folder / f"test_{index:04d}.jpg"
+                )
 
+            # Run the face recognition tool.
             with (
-                mock.patch(f"{MODULE}.messagebox.showinfo"),
                 mock.patch(
                     f"{MODULE}.filedialog.askdirectory",
                     return_value=temp_dir,
                 ),
-                mock.patch(
-                    f"{MODULE}.filedialog.askopenfilename",
-                    return_value=str(test_path),
-                ),
+                mock.patch(f"{MODULE}.messagebox.showerror") as show_error,
             ):
-                result = FaceRecognitionTool().run(None, ImageDocument())
+                result = FaceRecognitionTool().run(
+                    None,
+                    ImageDocument(),
+                )
 
+            # Check that the operation was successful.
             self.assertIsNotNone(result)
             self.assertIsNotNone(result.image)
+
+            show_error.assert_not_called()
+
             self.assertEqual(
                 result.details["Operation"],
-                "Face recognition with Eigenfaces",
+                "Eigenfaces face recognition",
             )
-            self.assertEqual(result.details["Test image"], "test_0001.jpg")
-            self.assertEqual(result.details["Neighbors displayed"], 3)
-            self.assertEqual(result.image.size, (640, 210))
+
+            self.assertEqual(
+                result.details["Method"],
+                "PCA + SVM (RBF)",
+            )
+
+            self.assertEqual(
+                result.details["Test images displayed"],
+                2,
+            )
+
+            self.assertEqual(
+                result.details["Total test images"],
+                2,
+            )
+
+            self.assertEqual(
+                result.details["Training images"],
+                10,
+            )
+
+            self.assertEqual(
+                result.details["Correct predictions"],
+                2,
+            )
+
+            self.assertEqual(
+                result.details["Incorrect predictions"],
+                0,
+            )
+
+            # Check the generated gallery.
+            self.assertEqual(result.image.size, (760, 235))
+
+            # Check that the PNG result was saved.
+            self.assertTrue(
+                (output / "face_recognition_results.png").exists()
+            )
 
     def test_cancelled_folder_selection(self) -> None:
 
         with (
-            mock.patch(f"{MODULE}.messagebox.showinfo"),
             mock.patch(
                 f"{MODULE}.filedialog.askdirectory",
                 return_value="",
             ),
+            mock.patch(f"{MODULE}.messagebox.showerror") as show_error,
         ):
-            result = FaceRecognitionTool().run(None, ImageDocument())
+            result = FaceRecognitionTool().run(
+                None,
+                ImageDocument(),
+            )
 
         self.assertIsNone(result)
-
+        show_error.assert_not_called()
 
 if __name__ == "__main__":
     unittest.main()
