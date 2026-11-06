@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-import re
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox
 
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
+from sklearn.svm import SVC
+from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import accuracy_score, classification_report
 
 from forensics_app.core import ImageDocument
 from .base import ForensicsTool, ToolResult
@@ -14,19 +16,24 @@ from .base import ForensicsTool, ToolResult
 
 def get_surname(name: str) -> str:
     """Return only the surname of a person."""
-    return str(name).split()[-1]
+    return str(name).rsplit(" ", 1)[-1]
 
 
 def create_gallery(
     images: list[Image.Image],
-    titles: list[str],
+    predicted_names: list[str],
+    true_names: list[str],
     columns: int = 4,
 ) -> Image.Image:
-    """Display the test image and its three closest training images."""
+    """Display test images with their predicted and true identities."""
 
-    cell_width = 180
-    cell_height = 220
-    rows = 1
+    cell_width = 190
+    cell_height = 235
+
+    image_width = 140
+    image_height = 189
+
+    rows = (len(images) + columns - 1) // columns
 
     canvas = Image.new(
         "RGB",
@@ -36,41 +43,70 @@ def create_gallery(
 
     draw = ImageDraw.Draw(canvas)
 
-    for index, image in enumerate(images[:columns]):
+    try:
+        font = ImageFont.truetype(
+            "/System/Library/Fonts/Supplemental/Arial.ttf",
+            16,
+        )
+    except OSError:
+        font = ImageFont.load_default()
 
-        x = index * cell_width
-        y = 0
+    for index, image in enumerate(images):
 
-        image = image.convert("L").convert("RGB").resize((120, 150))
+        row = index // columns
+        column = index % columns
 
-        # Display face image
-        canvas.paste(image, (x + 30, y + 55))
+        x = column * cell_width
+        y = row * cell_height
 
-        # Add a thin black border
-        draw.rectangle(
-            (x + 30, y + 55, x + 149, y + 204),
-            outline="black",
-            width=1,
+        # Display the prediction and the real identity.
+        title = (
+            f"predicted: {predicted_names[index]}\n"
+            f"true:      {true_names[index]}"
         )
 
-        # Center the title
         text_box = draw.multiline_textbbox(
             (0, 0),
-            titles[index],
+            title,
+            font=font,
             align="center",
+            spacing=2,
         )
 
         text_width = text_box[2] - text_box[0]
 
-        text_x = (
-            x + (cell_width - text_width) // 2 - text_box[0]
-        )
+        text_x = x + (cell_width - text_width) // 2 - text_box[0]
 
         draw.multiline_text(
             (text_x, y + 5),
-            titles[index],
+            title,
+            font=font,
             fill="black",
             align="center",
+            spacing=2,
+        )
+
+        # Resize all faces to the same dimensions.
+        image = image.convert("L").convert("RGB").resize(
+            (image_width, image_height),
+            Image.Resampling.LANCZOS,
+        )
+
+        image_x = x + (cell_width - image_width) // 2
+        image_y = y + 40
+
+        canvas.paste(image, (image_x, image_y))
+
+        # Add a thin black border.
+        draw.rectangle(
+            (
+                image_x,
+                image_y,
+                image_x + image_width - 1,
+                image_y + image_height - 1,
+            ),
+            outline="black",
+            width=1,
         )
 
     return canvas
@@ -81,7 +117,7 @@ class FaceRecognitionTool(ForensicsTool):
     tool_id = "face_recognition"
     title = "Face recognition"
     category = "Set 6 duties"
-    description = "Recognize faces using Eigenfaces, PCA and Euclidean distance."
+    description = "Recognize faces using Eigenfaces, PCA and SVM."
     requires_image = False
 
     def run(
@@ -90,44 +126,22 @@ class FaceRecognitionTool(ForensicsTool):
         document: ImageDocument,
     ) -> ToolResult | None:
 
-        messagebox.showinfo(
-            "Face recognition",
-            "Select one test image from the test folder.",
-            parent=parent,
-        )
-
-        image_path = filedialog.askopenfilename(
-            parent=parent,
-            title="Select test image",
-            filetypes=[
-                ("Images", "*.jpg *.jpeg *.png"),
-            ],
-        )
-
-        if not image_path:
-            return None
-
         try:
-            image_path = Path(image_path)
-            output = image_path.parent.parent
-
-            model_folder = output / "model"
-            train_folder = output / "train"
-
-            # Get the test image index from its filename
-            match = re.search(
-                r"test_(\d+)",
-                image_path.stem,
+            # Select the Eigenface results folder.
+            folder = filedialog.askdirectory(
+                parent=parent,
+                title="Select Eigenface results folder",
             )
 
-            if not match:
-                raise ValueError(
-                    "The selected image must have a name such as test_0000.jpg."
-                )
+            if not folder:
+                return None
 
-            test_index = int(match.group(1))
+            output = Path(folder)
 
-            # Load saved PCA coefficients and labels
+            model_folder = output / "model"
+            test_folder = output / "test"
+
+            # Load the saved PCA coefficients and labels.
             train_coefficients = np.load(
                 model_folder / "train_coefficients.npy"
             )
@@ -149,92 +163,116 @@ class FaceRecognitionTool(ForensicsTool):
                 allow_pickle=True,
             )
 
-            # Check the selected test image index
-            if test_index >= len(test_coefficients):
-                raise ValueError(
-                    "The selected test image does not exist in the saved PCA coefficients."
-                )
+            # Search for the best SVM parameters,
+            # following the professor's notebook.
+            param_grid = {
+                "C": [1e3, 5e3, 1e4, 5e4, 1e5],
+                "gamma": [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.1],
+            }
 
-            # Get the PCA coefficients of the test image
-            test_vector = test_coefficients[test_index]
-
-            # Calculate Euclidean distances to all training images
-            distances = np.linalg.norm(
-                train_coefficients - test_vector,
-                axis=1,
+            classifier = GridSearchCV(
+                SVC(
+                    kernel="rbf",
+                    class_weight="balanced",
+                ),
+                param_grid,
+                cv=5,
+                verbose=1,
             )
 
-            # Find the three closest training images
-            nearest_indices = np.argsort(distances)[:3]
-
-            # Get the real identity of the test image
-            true_name = get_surname(
-                target_names[int(test_labels[test_index])]
+            # Train the classifier using the training set.
+            classifier.fit(
+                train_coefficients,
+                train_labels,
             )
 
-            # The closest neighbour gives the predicted identity
-            predicted_name = get_surname(
-                target_names[int(train_labels[nearest_indices[0]])]
+            # Predict the identities of the test images.
+            predictions = classifier.predict(test_coefficients)
+
+            # Calculate accuracy using the complete test set.
+            accuracy = accuracy_score(
+                test_labels,
+                predictions,
             )
 
-            # Load the test image
-            images = [
-                Image.open(image_path).convert("L")
-            ]
+            correct = int(np.sum(predictions == test_labels))
+            incorrect = len(test_labels) - correct
 
-            titles = [
-                f"TEST\npredicted: {predicted_name}\ntrue: {true_name}"
-            ]
+            # Generate the classification report.
+            report = classification_report(
+                test_labels,
+                predictions,
+                labels=np.arange(len(target_names)),
+                target_names=target_names,
+                zero_division=0,
+            )
 
-            # Load the three closest training images
-            for position, train_index in enumerate(nearest_indices):
+            # Display the first 12 test images.
+            number_of_images = min(12, len(test_labels))
 
-                train_image_path = (
-                    train_folder / f"train_{train_index:04d}.jpg"
+            images = []
+            predicted_names = []
+            true_names = []
+
+            for index in range(number_of_images):
+
+                # Prediction and true label belong to the same test image.
+                predicted_name = get_surname(
+                    target_names[int(predictions[index])]
                 )
 
-                train_image = Image.open(
-                    train_image_path
-                ).convert("L")
-
-                images.append(train_image)
-
-                train_name = get_surname(
-                    target_names[int(train_labels[train_index])]
+                true_name = get_surname(
+                    target_names[int(test_labels[index])]
                 )
 
-                distance = distances[train_index]
+                # Load the corresponding test image.
+                image_path = test_folder / f"test_{index:04d}.jpg"
 
-                titles.append(
-                    f"Nearest {position + 1}\n"
-                    f"name: {train_name}\n"
-                    f"distance: {distance:.2f}"
-                )
+                if not image_path.exists():
+                    raise FileNotFoundError(
+                        f"Test image not found: {image_path}"
+                    )
 
-            # Create the gallery
+                with Image.open(image_path) as image_file:
+                    image = image_file.convert("L").copy()
+
+                images.append(image)
+                predicted_names.append(predicted_name)
+                true_names.append(true_name)
+
+            # Create the gallery with 12 test images.
             result_image = create_gallery(
                 images,
-                titles,
+                predicted_names,
+                true_names,
+            )
+
+            # Save the results as a PNG image.
+            result_image.save(
+                output / "face_recognition_results.png"
             )
 
             return ToolResult(
                 image=result_image,
                 message=(
                     f"Face recognition completed. "
-                    f"Predicted: {predicted_name}. "
-                    f"True: {true_name}."
+                    f"{correct}/{len(test_labels)} correct predictions "
+                    f"({accuracy * 100:.2f}% accuracy)."
                 ),
                 details={
                     "Operation": "Eigenfaces face recognition",
-                    "Method": "PCA + Euclidean distance",
-                    "Test image": image_path.name,
-                    "Predicted identity": predicted_name,
-                    "True identity": true_name,
-                    "Closest training images": 3,
-                    "Distances": [
-                        f"{distances[i]:.2f}"
-                        for i in nearest_indices
-                    ],
+                    "Method": "PCA + SVM (RBF)",
+                    "Test images displayed": number_of_images,
+                    "Total test images": len(test_labels),
+                    "Training images": len(train_labels),
+                    "Correct predictions": correct,
+                    "Incorrect predictions": incorrect,
+                    "Accuracy": f"{accuracy * 100:.2f}%",
+                    "Best parameters": str(classifier.best_params_),
+                    "Classification report": report,
+                    "Saved image": str(
+                        output / "face_recognition_results.png"
+                    ),
                 },
             )
 
