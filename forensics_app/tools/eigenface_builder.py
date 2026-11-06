@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 import csv
+import ssl
+import shutil
 import tkinter as tk
+from io import BytesIO
 from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog
 
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image
 from sklearn.datasets import fetch_lfw_people
 from sklearn.decomposition import PCA
 from sklearn.model_selection import train_test_split
@@ -15,8 +22,22 @@ from forensics_app.core import ImageDocument
 from .base import ForensicsTool, ToolResult
 
 
+MAX_EIGENFACES_SHOWN = 12
+
+
+def find_existing_model_root(folder: Path) -> Path | None:
+    #Return the folder that already contains a saved Eigenface model.
+
+    for candidate in (folder, *folder.parents):
+        if (candidate / "model" / "train_coefficients.npy").exists():
+            return candidate
+
+    return None
+
+
 def save_images(images, labels, target_names, folder, split, csv_writer):
     #Save face images and their corresponding labels.
+
     folder.mkdir(parents=True, exist_ok=True)
 
     for index, (image, label) in enumerate(zip(images, labels)):
@@ -33,56 +54,57 @@ def save_images(images, labels, target_names, folder, split, csv_writer):
             target_names[label],
         ])
 
+def visualize_eigenfaces(
+    eigenfaces: np.ndarray,
+    h: int,
+    w: int,
+    n_row: int = 3,
+    n_col: int = 4,
+) -> Image.Image:
 
-def visualize_eigenfaces(eigenfaces: np.ndarray, k: int) -> Image.Image:
-    #Create a grid showing the first K eigenfaces.
-    rows = (k + 3) // 4
-    cell_width = 150
-    cell_height = 190
+    titles = [
+        f"eigenface {i}"
+        for i in range(len(eigenfaces))
+    ]
 
-    canvas = Image.new(
-        "RGB",
-        (4 * cell_width, rows * cell_height),
-        "white",
+    # Increase the figure size to make the eigenfaces larger.
+    fig = plt.figure(figsize=(2.8 * n_col, 2.8 * n_row))
+
+    # Reduce spacing to give more room to the face images.
+    plt.subplots_adjust(
+        bottom=0.03,
+        left=0.02,
+        right=0.98,
+        top=0.92,
+        hspace=0.30,
+        wspace=0.15,
     )
-    draw = ImageDraw.Draw(canvas)
 
-    for index in range(k):
-        face = eigenfaces[index]
+    for i in range(min(n_row * n_col, len(eigenfaces))):
+        plt.subplot(n_row, n_col, i + 1)
 
-        # Normalize each eigenface for visualization
-        face = face - face.min()
-        if face.max() > 0:
-            face = face / face.max()
-
-        face_image = Image.fromarray(
-            (face * 255).astype(np.uint8)
-        ).resize((120, 150))
-
-        x = (index % 4) * cell_width
-        y = (index // 4) * cell_height
-        # Display eigenface image
-        canvas.paste(face_image, (x + 15, y + 25))
-
-        # Add a thin black border around the image
-        draw.rectangle(
-            (x + 15, y + 25, x + 134, y + 174),
-            outline="black",
-            width=1,
+        plt.imshow(
+            eigenfaces[i].reshape((h, w)),
+            cmap=plt.cm.gray,
         )
 
-        label = f"Eigenface {index}"
+        plt.title(titles[i], size=13)
+        plt.xticks(())
+        plt.yticks(())
 
-        text_width = draw.textbbox((0, 0), label)[2]
+    buffer = BytesIO()
+    fig.savefig(buffer, format="png", dpi=100)
+    buffer.seek(0)
 
-        text_x = x + (cell_width - text_width) // 2
+    result_image = Image.open(buffer).convert("RGB").copy()
 
-        draw.text((text_x, y + 5), label, fill="black")
+    plt.close(fig)
+    buffer.close()
 
-    return canvas
-
+    return result_image
 
 class EigenfaceBuilderTool(ForensicsTool):
+
     tool_id = "eigenface_builder"
     title = "Eigenface builder"
     category = "Set 6 duties"
@@ -98,7 +120,7 @@ class EigenfaceBuilderTool(ForensicsTool):
         messagebox.showinfo(
             "Eigenface builder",
             "The LFW face dataset will be downloaded.\n\n"
-            "Choose a folder where the training images, test images "
+            "Choose an EMPTY folder where the training images, test images "
             "and PCA model will be saved.",
             parent=parent,
         )
@@ -112,60 +134,71 @@ class EigenfaceBuilderTool(ForensicsTool):
             return None
 
         try:
-            # Download the LFW dataset
-            dataset = fetch_lfw_people(
-                min_faces_per_person=20,
-                resize=0.4,
-                color=False,
-            )
-
-            images = dataset.images
-            labels = dataset.target
-            target_names = dataset.target_names
-
-            # Split images into training and test sets
-            X_train, X_test, y_train, y_test = train_test_split(
-                images,
-                labels,
-                test_size=0.25,
-                random_state=42,
-                stratify=labels,
-            )
-
             output = Path(folder)
+
             train_folder = output / "train"
             test_folder = output / "test"
             model_folder = output / "model"
 
-            model_folder.mkdir(parents=True, exist_ok=True)
+            # 1. Avoid selecting a folder inside a previous Eigenface model.
+            existing_root = find_existing_model_root(output)
 
-            # Save training and test images with their labels
-            with open(
-                output / "image_labels.csv",
-                "w",
-                newline="",
-                encoding="utf-8",
-            ) as file:
-                writer = csv.writer(file)
-                writer.writerow(["split", "filename", "label", "person"])
-
-                save_images(
-                    X_train, y_train, target_names,
-                    train_folder, "train", writer,
-                )
-                save_images(
-                    X_test, y_test, target_names,
-                    test_folder, "test", writer,
+            if existing_root is not None and existing_root != output:
+                raise ValueError(
+                    "The selected folder is inside a previous Eigenface model:\n"
+                    f"{existing_root}\n\n"
+                    "Choose a different folder to avoid nested folders."
                 )
 
-            # Ask how many eigenfaces to calculate
-            max_k = min(len(X_train), X_train.shape[1] * X_train.shape[2])
+            # 2. Ask before replacing previously generated results.
+            old_folders = [
+                p for p in (train_folder, test_folder, model_folder)
+                if p.exists()
+            ]
+
+            if old_folders:
+                replace = messagebox.askyesno(
+                    "Eigenface builder",
+                    "This folder already contains train/test/model folders.\n"
+                    "Do you want to replace them?",
+                    parent=parent,
+                )
+
+                if not replace:
+                    return None
+
+            # 3. Fix SSL certificate verification for the LFW download on macOS.
+            ssl._create_default_https_context = ssl._create_unverified_context
+
+            # 4. Download the same LFW dataset configuration as the professor.
+            dataset = fetch_lfw_people(
+                min_faces_per_person=70,
+                resize=0.4,
+            )
+
+            images = dataset.images
+            X = dataset.data
+            labels = dataset.target
+            target_names = dataset.target_names
+
+            n_samples, h, w = images.shape
+
+            # 5. Split the dataset exactly as in the professor's notebook.
+            X_train, X_test, y_train, y_test = train_test_split(
+                X,
+                labels,
+                test_size=0.25,
+                random_state=42,
+            )
+
+            # 6. Ask how many PCA components to calculate.
+            max_k = min(len(X_train), X_train.shape[1])
 
             k = simpledialog.askinteger(
                 "Eigenface builder",
                 f"Number of eigenfaces (1 to {max_k}):",
                 parent=parent,
-                initialvalue=min(12, max_k),
+                initialvalue=min(100, max_k),
                 minvalue=1,
                 maxvalue=max_k,
             )
@@ -173,47 +206,105 @@ class EigenfaceBuilderTool(ForensicsTool):
             if k is None:
                 return None
 
-            # Flatten images before applying PCA
-            X_train_flat = X_train.reshape(len(X_train), -1)
-            X_test_flat = X_test.reshape(len(X_test), -1)
+            # 7. Remove previous results after the user confirms replacement.
+            for old in old_folders:
+                shutil.rmtree(old, ignore_errors=True)
 
-            # Calculate mean face and PCA components
+            model_folder.mkdir(parents=True, exist_ok=True)
+
+            # Save training/test images and their original labels.
+            with open(
+                output / "image_labels.csv",
+                "w",
+                newline="",
+                encoding="utf-8",
+            ) as file:
+
+                writer = csv.writer(file)
+                writer.writerow(["split", "filename", "label", "person"])
+
+                # Convert flattened images back to their original dimensions.
+                save_images(
+                    X_train.reshape(-1, h, w),
+                    y_train,
+                    target_names,
+                    train_folder,
+                    "train",
+                    writer,
+                )
+
+                save_images(
+                    X_test.reshape(-1, h, w),
+                    y_test,
+                    target_names,
+                    test_folder,
+                    "test",
+                    writer,
+                )
+
+            # 8. Calculate PCA using the professor's configuration.
+            print(
+                f"Extracting the top {k} eigenfaces "
+                f"from {X_train.shape[0]} faces"
+            )
+
             pca = PCA(
                 n_components=k,
                 svd_solver="randomized",
-                random_state=42,
-            )
+                whiten=True,
+            ).fit(X_train)
 
-            train_coefficients = pca.fit_transform(X_train_flat)
-            test_coefficients = pca.transform(X_test_flat)
+            # Project training and test images onto the PCA basis.
+            train_coefficients = pca.transform(X_train)
+            test_coefficients = pca.transform(X_test)
 
-            eigenfaces = pca.components_.reshape(
-                k, X_train.shape[1], X_train.shape[2]
-            )
+            # Convert PCA components into eigenface images.
+            eigenfaces = pca.components_.reshape((k, h, w))
 
-            mean_face = pca.mean_.reshape(
-                X_train.shape[1], X_train.shape[2]
-            )
+            # Calculate the mean face.
+            mean_face = pca.mean_.reshape((h, w))
 
-            # Save the model and coefficients
+            # 9. Save the PCA model and its coefficients.
             np.save(model_folder / "mean_face.npy", mean_face)
             np.save(model_folder / "eigenfaces.npy", eigenfaces)
-            np.save(model_folder / "train_coefficients.npy", train_coefficients)
-            np.save(model_folder / "test_coefficients.npy", test_coefficients)
+
+            np.save(
+                model_folder / "train_coefficients.npy",
+                train_coefficients,
+            )
+
+            np.save(
+                model_folder / "test_coefficients.npy",
+                test_coefficients,
+            )
+
             np.save(model_folder / "train_labels.npy", y_train)
             np.save(model_folder / "test_labels.npy", y_test)
             np.save(model_folder / "target_names.npy", target_names)
+
             np.save(
                 model_folder / "explained_variance_ratio.npy",
                 pca.explained_variance_ratio_,
             )
 
-            # Visualize the first K eigenfaces
-            result_image = visualize_eigenfaces(eigenfaces, k)
+            # 10. Visualize the first 12 eigenfaces as in the professor's notebook.
+            n_shown = min(k, MAX_EIGENFACES_SHOWN)
+
+            result_image = visualize_eigenfaces(
+                eigenfaces[:n_shown],
+                h,
+                w,
+            )
+
+            # Save the visualization as a PNG image.
+            result_image.save(output / "eigenfaces.png")
 
             return ToolResult(
                 image=result_image,
-                message=f"Eigenface model created successfully with {k} components.",
+                message=(
+                    f"Eigenface model created successfully with {k} components "
+                    f"({n_shown} shown)."
+                ),
                 details={
                     "Operation": "Eigenface builder",
                     "Dataset": "LFW People",
@@ -221,7 +312,8 @@ class EigenfaceBuilderTool(ForensicsTool):
                     "Test images": len(X_test),
                     "People": len(target_names),
                     "Eigenfaces": k,
-                    "Image size": f"{X_train.shape[2]}x{X_train.shape[1]}",
+                    "Eigenfaces shown": n_shown,
+                    "Image size": f"{w}x{h}",
                     "Explained variance": (
                         f"{pca.explained_variance_ratio_.sum() * 100:.2f}%"
                     ),
@@ -235,4 +327,5 @@ class EigenfaceBuilderTool(ForensicsTool):
                 str(error),
                 parent=parent,
             )
+
             return None
