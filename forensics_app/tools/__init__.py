@@ -1,5 +1,11 @@
 """Register course functionality here so it appears in the sidebar."""
 
+from .bow_tools import (
+    BowClassifierTool,
+    BowHistogramTool,
+    BowSession,
+    CodebookBuilderTool,
+)
 from .channel_split import ChannelSplitTool
 from .channel_swap import ChannelSwapTool
 from .contrast_stretching import ContrastStretchingTool
@@ -8,6 +14,9 @@ from .corner_detection import CornerDetectionTool
 from .cross_correlation import CrossCorrelationTool
 from .descriptor_extractor import DescriptorExtractorTool
 from .edges import CannyTool, EdgeOverlayTool
+from .eigenface_builder import EigenfaceBuilderTool
+from .face_detection import FaceDetectionTool
+from .face_recognition import FaceRecognitionTool
 from .feature_matching import FeatureMatchingTool
 from .filters import FiltersTool
 from .grayscale import GrayscaleTool
@@ -20,18 +29,20 @@ from .matching_configs import MatchingConfigsTool
 from .person_detection import PersonDetectionTool
 from .registry import ToolRegistry
 from .sharpening import SharpeningTool
-from .face_detection import FaceDetectionTool
-from .eigenface_builder import EigenfaceBuilderTool
-from .face_recognition import FaceRecognitionTool
 
 
 def build_tool_registry() -> ToolRegistry:
+    bow_session = BowSession()  # one Bag of Words model shared by the Set 7 tools
     return ToolRegistry(
         [
+            # Set 7
+            CodebookBuilderTool(bow_session),
+            BowHistogramTool(bow_session),
+            BowClassifierTool(bow_session),
             # Set 6
-            FaceRecognitionTool(),
-            EigenfaceBuilderTool(),
             FaceDetectionTool(),
+            EigenfaceBuilderTool(),
+            FaceRecognitionTool(),
             # Set 5
             CornerDetectionTool(),
             DescriptorExtractorTool(),

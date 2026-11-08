@@ -11,5 +11,8 @@ dist/
 *.egg-info/
 outputs/
 models/
+!forensics_app/models/
+forensics_app/models/*
+!forensics_app/models/face_detection_yunet_2023mar.onnx
 datasets/
 set2-images/

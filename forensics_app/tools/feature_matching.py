@@ -5,7 +5,7 @@ from __future__ import annotations
 import tkinter as tk
 from dataclasses import dataclass
 from itertools import cycle
-from tkinter import filedialog, messagebox, simpledialog
+from tkinter import messagebox, simpledialog
 
 import numpy as np
 from PIL import Image, ImageDraw
@@ -13,6 +13,7 @@ from skimage import feature, measure, transform
 
 from forensics_app.core import ImageDocument
 
+from . import filedialog
 from .base import ForensicsTool, ToolResult
 from .constants import DESCRIPTORS, ORB, SIFT, SIFT_MIN_SIGMA
 from .dialogs import ask_choice

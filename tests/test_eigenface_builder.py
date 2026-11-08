@@ -1,10 +1,10 @@
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
 
 from forensics_app.tools.eigenface_builder import EigenfaceBuilderTool
+
 
 class TestEigenfaceBuilder:
 
@@ -45,6 +45,7 @@ class TestEigenfaceBuilder:
 
         # Restore the original SSL context after the test.
         import ssl
+
         original_ssl = ssl._create_default_https_context
         monkeypatch.setattr(
             ssl,
@@ -83,6 +84,7 @@ class TestEigenfaceBuilder:
             "test_labels.npy",
             "target_names.npy",
             "explained_variance_ratio.npy",
+            "explained_variance.npy",
         ]
 
         for filename in expected_files:

@@ -6,6 +6,8 @@ import tkinter as tk
 from collections.abc import Sequence
 from tkinter import ttk
 
+from PIL import Image, ImageTk
+
 
 def ask_choice(
     parent: tk.Misc, title: str, prompt: str, options: Sequence[str]
@@ -104,6 +106,92 @@ def ask_odd_size(
     dialog.grab_set()
     parent.wait_window(dialog)
     return choice[0] if choice else None
+
+
+def ask_image_action(
+    parent: tk.Misc, title: str, image: Image.Image, action: str
+) -> bool:
+    """Show ``image`` with an ``action`` button; return True if it was clicked."""
+    dialog = tk.Toplevel(parent)
+    dialog.withdraw()
+    dialog.title(title)
+    dialog.transient(parent)
+    clicked: list[bool] = []
+
+    def accept() -> None:
+        clicked.append(True)
+        dialog.destroy()
+
+    owner = parent.winfo_toplevel()
+    preview = image.copy()
+    preview.thumbnail(
+        (
+            max(owner.winfo_screenwidth() - 160, 200),
+            max(owner.winfo_screenheight() - 240, 200),
+        ),
+        Image.Resampling.LANCZOS,
+    )
+    photo = ImageTk.PhotoImage(preview, master=dialog)
+
+    frame = ttk.Frame(dialog, padding=12)
+    frame.pack()
+    label = ttk.Label(frame, image=photo)
+    label.image = photo  # keep a reference so Tk does not drop the picture
+    label.pack()
+    buttons = ttk.Frame(frame)
+    buttons.pack(pady=(10, 0))
+    ttk.Button(buttons, text=action, command=accept).pack(side="left", padx=4)
+    ttk.Button(buttons, text="Cancel", command=dialog.destroy).pack(side="left", padx=4)
+    dialog.bind("<Return>", lambda _event: accept())
+    dialog.bind("<Escape>", lambda _event: dialog.destroy())
+    _center_on(dialog, owner)
+    dialog.grab_set()
+    parent.wait_window(dialog)
+    return bool(clicked)
+
+
+class ProgressDialog:
+    """Small window with a progress bar for long jobs run on the UI thread.
+
+    Use it as a context manager and call it as ``progress(step, total, text)``.
+    """
+
+    def __init__(self, parent: tk.Misc, title: str) -> None:
+        self._parent = parent
+        self._title = title
+        self._window: tk.Toplevel | None = None
+
+    def __enter__(self) -> ProgressDialog:
+        window = tk.Toplevel(self._parent)
+        window.withdraw()
+        window.title(self._title)
+        window.transient(self._parent)
+        window.resizable(False, False)
+        window.protocol("WM_DELETE_WINDOW", lambda: None)  # cannot be closed
+        frame = ttk.Frame(window, padding=12)
+        frame.pack()
+        self._text = tk.StringVar(value="Starting…")
+        ttk.Label(frame, textvariable=self._text, width=55).pack(anchor="w")
+        self._bar = ttk.Progressbar(frame, length=360, mode="determinate")
+        self._bar.pack(pady=(8, 0))
+        _center_on(window, self._parent.winfo_toplevel())
+        window.grab_set()
+        self._window = window
+        window.update()
+        return self
+
+    def __call__(self, step: int, total: int, text: str) -> None:
+        if self._window is None:
+            return
+        self._bar.configure(maximum=max(total, 1), value=step)
+        self._text.set(text)
+        self._window.update()
+
+    def __exit__(self, *_exc: object) -> None:
+        if self._window is not None:
+            self._window.grab_release()
+            self._window.destroy()
+            self._window = None
 
 
 def _center_on(window: tk.Toplevel, owner: tk.Misc) -> None:

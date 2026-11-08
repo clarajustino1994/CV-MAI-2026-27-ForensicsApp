@@ -5,13 +5,14 @@ from __future__ import annotations
 import tkinter as tk
 from dataclasses import dataclass
 from pathlib import Path
-from tkinter import filedialog, messagebox
+from tkinter import messagebox
 
 import numpy as np
 from PIL import Image, UnidentifiedImageError
 
 from forensics_app.core import ImageDocument
 
+from . import filedialog
 from .base import ForensicsTool, ToolResult
 from .dialogs import ask_choice
 from .feature_matching import (

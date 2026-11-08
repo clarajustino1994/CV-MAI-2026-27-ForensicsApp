@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import messagebox
 
 import numpy as np
 from PIL import Image
@@ -11,6 +11,7 @@ from skimage.feature import match_template
 
 from forensics_app.core import ImageDocument
 
+from . import filedialog
 from .base import ForensicsTool, ToolResult
 
 

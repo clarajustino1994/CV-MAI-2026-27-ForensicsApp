@@ -11,6 +11,20 @@ from PIL import Image
 
 from forensics_app.core import ImageDocument
 
+# Flag stored in ``Image.info``; PIL keeps it through copies, so it survives
+# the undo/redo history, and PNG/JPEG saving ignores it
+SCROLL_KEY = "forensics_app.scroll_vertically"
+
+
+def mark_scrollable(image: Image.Image) -> Image.Image:
+    """Ask the viewer to fit ``image`` to the width and scroll it vertically."""
+    image.info[SCROLL_KEY] = True
+    return image
+
+
+def is_scrollable(image: Image.Image | None) -> bool:
+    return image is not None and bool(image.info.get(SCROLL_KEY))
+
 
 @dataclass(frozen=True)
 class ToolResult:

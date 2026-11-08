@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import tkinter as tk
 from dataclasses import dataclass
-from tkinter import filedialog, messagebox, simpledialog
+from tkinter import messagebox, simpledialog
 
 import numpy as np
 from PIL import Image, ImageDraw
 
 from forensics_app.core import ImageDocument
 
+from . import filedialog
 from .base import ForensicsTool, ToolResult
 from .hog import HogParams, hog_descriptor, to_array
 

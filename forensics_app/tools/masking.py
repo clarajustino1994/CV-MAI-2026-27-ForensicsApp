@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import tkinter as tk
-from tkinter import filedialog
 
 import numpy as np
 from PIL import Image
 
 from forensics_app.core import ImageDocument
 
+from . import filedialog
 from .base import ForensicsTool, ToolResult
 from .dialogs import ask_choice
 
