@@ -1,0 +1,76 @@
+{
+  "model_name": "inception_transfer",
+  "architecture_builder": "cv_models.BUILDERS['inception_transfer']",
+  "created": "2026-11-15T19:47:00",
+  "framework": "tensorflow 2.21.0 / keras 3.13.2",
+  "weights_file": "inception_transfer.weights.h5",
+  "dataset": {
+    "name": "CIFAR-10",
+    "n_train_total": 50000,
+    "n_train_used": 20000,
+    "n_validation": 2000,
+    "n_test": 10000,
+    "samples_per_class_used": 2000
+  },
+  "class_names": [
+    "airplane",
+    "automobile",
+    "bird",
+    "cat",
+    "deer",
+    "dog",
+    "frog",
+    "horse",
+    "ship",
+    "truck"
+  ],
+  "input_shape": [
+    32,
+    32,
+    3
+  ],
+  "preprocessing": "Input: RGB image 32x32, uint8/float in range 0-255 (do NOT normalize outside the model). Rescaling and normalization are inside the model (Rescaling/Resizing layers). Images of another size: resize to 32x32 before predicting.",
+  "training": {
+    "optimizer": "Adam",
+    "learning_rate": 0.001,
+    "loss": "sparse_categorical_crossentropy",
+    "epochs": 5,
+    "batch_size": 64,
+    "train_time_sec": 1830.7,
+    "notes": "Frozen ImageNet InceptionV3 + dense head; 96x96 internal; 20k subset."
+  },
+  "history": {
+    "accuracy": [
+      0.5638333559036255,
+      0.6546111106872559,
+      0.6802777647972107,
+      0.7031111121177673,
+      0.7195000052452087
+    ],
+    "loss": [
+      1.2894076108932495,
+      1.009151577949524,
+      0.921746551990509,
+      0.8519207835197449,
+      0.7987309098243713
+    ],
+    "val_accuracy": [
+      0.6575000286102295,
+      0.6575000286102295,
+      0.6554999947547913,
+      0.6654999852180481,
+      0.6735000014305115
+    ],
+    "val_loss": [
+      1.0140477418899536,
+      0.9804984331130981,
+      0.9807974100112915,
+      0.9772324562072754,
+      0.9528606534004211
+    ]
+  },
+  "test_metrics": {
+    "accuracy": 0.671999990940094,
+    "loss": 0.9668523669242859
+  }
+}
