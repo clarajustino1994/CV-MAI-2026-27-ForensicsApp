@@ -16,3 +16,7 @@ forensics_app/models/*
 !forensics_app/models/face_detection_yunet_2023mar.onnx
 datasets/
 set2-images/
+# Set 9 datasets (YOLO and COCO formats)
+Set9/blood cell.v1i.yolov11/*
+Set9/blood_cell.v1i.yolov11/*
+Set9/blood_cell.v1i.coco/*
