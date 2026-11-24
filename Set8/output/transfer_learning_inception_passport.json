@@ -1,0 +1,22 @@
+{
+    "model_name": "transfer_learning_inceptionv3",
+    "dataset": "CIFAR-10",
+    "sample_size": {
+        "train": 1000,
+        "test": 10000
+    },
+    "class_names": [
+        "airplane",
+        "automobile",
+        "bird",
+        "cat",
+        "deer",
+        "dog",
+        "frog",
+        "horse",
+        "ship",
+        "truck"
+    ],
+    "preprocessing_instructions": "Resize inputs to 128x128x3 using skimage.transform.resize",
+    "optimizer_and_loss": "Adam (lr=0.001 then 0.0001 fine-tuning), Categorical Crossentropy"
+}
