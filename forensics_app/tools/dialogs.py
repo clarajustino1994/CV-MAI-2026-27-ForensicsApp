@@ -150,6 +150,51 @@ def ask_image_action(
     return bool(clicked)
 
 
+def ask_details_action(
+    parent: tk.Misc,
+    title: str,
+    heading: str,
+    details: dict[str, str],
+    action: str,
+) -> bool:
+    """Show ``details`` as a table with an ``action`` button.
+
+    Return True if the action button was clicked, False on Close.
+    """
+    dialog = tk.Toplevel(parent)
+    dialog.withdraw()
+    dialog.title(title)
+    dialog.transient(parent)
+    clicked: list[bool] = []
+
+    def accept() -> None:
+        clicked.append(True)
+        dialog.destroy()
+
+    frame = ttk.Frame(dialog, padding=12)
+    frame.pack(fill="both", expand=True)
+    ttk.Label(frame, text=heading, font=("TkDefaultFont", 13, "bold")).grid(
+        row=0, column=0, columnspan=2, sticky="w", pady=(0, 8)
+    )
+    for row, (name, value) in enumerate(details.items(), start=1):
+        ttk.Label(frame, text=f"{name}:", font=("TkDefaultFont", 11, "bold")).grid(
+            row=row, column=0, sticky="nw", padx=(0, 10), pady=2
+        )
+        ttk.Label(frame, text=value, wraplength=420, justify="left").grid(
+            row=row, column=1, sticky="w", pady=2
+        )
+    buttons = ttk.Frame(frame)
+    buttons.grid(row=len(details) + 1, column=0, columnspan=2, pady=(12, 0))
+    ttk.Button(buttons, text=action, command=accept).pack(side="left", padx=4)
+    ttk.Button(buttons, text="Close", command=dialog.destroy).pack(side="left", padx=4)
+    dialog.bind("<Return>", lambda _event: accept())
+    dialog.bind("<Escape>", lambda _event: dialog.destroy())
+    _center_on(dialog, parent.winfo_toplevel())
+    dialog.grab_set()
+    parent.wait_window(dialog)
+    return bool(clicked)
+
+
 class ProgressDialog:
     """Small window with a progress bar for long jobs run on the UI thread.
 

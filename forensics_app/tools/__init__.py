@@ -8,6 +8,7 @@ from .bow_tools import (
 )
 from .channel_split import ChannelSplitTool
 from .channel_swap import ChannelSwapTool
+from .cnn_classification import CnnClassificationTool
 from .contrast_stretching import ContrastStretchingTool
 from .convolution import Convolution
 from .corner_detection import CornerDetectionTool
@@ -18,6 +19,7 @@ from .eigenface_builder import EigenfaceBuilderTool
 from .face_detection import FaceDetectionTool
 from .face_recognition import FaceRecognitionTool
 from .feature_matching import FeatureMatchingTool
+from .feature_visualization import FeatureVisualizationTool
 from .filters import FiltersTool
 from .grayscale import GrayscaleTool
 from .histogram import HistogramTool
@@ -29,12 +31,19 @@ from .matching_configs import MatchingConfigsTool
 from .person_detection import PersonDetectionTool
 from .registry import ToolRegistry
 from .sharpening import SharpeningTool
+from .yolo_detection import YoloBloodCellTool, YoloPretrainedTool
 
 
 def build_tool_registry() -> ToolRegistry:
     bow_session = BowSession()  # one Bag of Words model shared by the Set 7 tools
     return ToolRegistry(
         [
+            # Set 9
+            YoloPretrainedTool(),
+            YoloBloodCellTool(),
+            # Set 8
+            CnnClassificationTool(),
+            FeatureVisualizationTool(),
             # Set 7
             CodebookBuilderTool(bow_session),
             BowHistogramTool(bow_session),
