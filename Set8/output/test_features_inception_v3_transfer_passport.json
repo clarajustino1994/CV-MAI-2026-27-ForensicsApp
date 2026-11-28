@@ -1,0 +1,32 @@
+{
+    "model_name": "transfer_learning_inception",
+    "feature_layer": "custom_dense (Dense 1024 after global_avg_pool)",
+    "architecture_file": "transfer_learning_inception_architecture.json",
+    "weights_file": "transfer_learning_inception_weights.weights.h5",
+    "preprocessing_instructions": "Cast to float32 and divide by 255.0, then resize to 128x128x3 using skimage.transform.resize (preserve_range=True, anti_aliasing=True). No keras preprocess_input.",
+    "feature_dim": 1024,
+    "dataset": "CIFAR-10 test split",
+    "sample_size": {
+        "per_class": 100,
+        "total": 1000
+    },
+    "class_names": [
+        "airplane",
+        "automobile",
+        "bird",
+        "cat",
+        "deer",
+        "dog",
+        "frog",
+        "horse",
+        "ship",
+        "truck"
+    ],
+    "arrays": {
+        "features": "float32 (N, 1024) transfer_learning_inception custom_dense (Dense 1024 after global_avg_pool) vectors",
+        "labels": "int64 (N,) true class index",
+        "test_indices": "int64 (N,) index of each image in x_test",
+        "images": "uint8 (N, 32, 32, 3) original RGB images",
+        "class_names": "str (10,) class names"
+    }
+}

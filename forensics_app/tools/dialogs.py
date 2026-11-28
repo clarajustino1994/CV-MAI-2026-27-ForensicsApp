@@ -195,6 +195,51 @@ def ask_details_action(
     return bool(clicked)
 
 
+def ask_texts(
+    parent: tk.Misc,
+    title: str,
+    prompt: str,
+    fields: Sequence[tuple[str, str]],
+    action: str = "OK",
+) -> list[str] | None:
+    """One text box per ``(label, initial value)``; return the texts or ``None``."""
+    dialog = tk.Toplevel(parent)
+    dialog.withdraw()
+    dialog.title(title)
+    dialog.transient(parent)
+    dialog.resizable(False, False)
+    variables = [tk.StringVar(master=dialog, value=initial) for _, initial in fields]
+    answer: list[list[str]] = []
+
+    def accept() -> None:
+        answer.append([variable.get() for variable in variables])
+        dialog.destroy()
+
+    frame = ttk.Frame(dialog, padding=12)
+    frame.pack()
+    ttk.Label(frame, text=prompt, wraplength=480, justify="left").grid(
+        row=0, column=0, columnspan=2, sticky="w", pady=(0, 10)
+    )
+    for row, ((label, _), variable) in enumerate(zip(fields, variables), start=1):
+        ttk.Label(frame, text=label, font=("TkDefaultFont", 11, "bold")).grid(
+            row=row, column=0, sticky="w", padx=(0, 10), pady=3
+        )
+        entry = ttk.Entry(frame, textvariable=variable, width=55)
+        entry.grid(row=row, column=1, sticky="we", pady=3)
+        if row == 1:
+            entry.focus_set()
+    buttons = ttk.Frame(frame)
+    buttons.grid(row=len(fields) + 1, column=0, columnspan=2, pady=(12, 0))
+    ttk.Button(buttons, text=action, command=accept).pack(side="left", padx=4)
+    ttk.Button(buttons, text="Cancel", command=dialog.destroy).pack(side="left", padx=4)
+    dialog.bind("<Return>", lambda _event: accept())
+    dialog.bind("<Escape>", lambda _event: dialog.destroy())
+    _center_on(dialog, parent.winfo_toplevel())
+    dialog.grab_set()
+    parent.wait_window(dialog)
+    return answer[0] if answer else None
+
+
 class ProgressDialog:
     """Small window with a progress bar for long jobs run on the UI thread.
 

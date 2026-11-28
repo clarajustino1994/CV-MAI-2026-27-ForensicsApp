@@ -8,6 +8,7 @@ from .bow_tools import (
 )
 from .channel_split import ChannelSplitTool
 from .channel_swap import ChannelSwapTool
+from .clip_zero_shot import ClipZeroShotTool
 from .cnn_classification import CnnClassificationTool
 from .contrast_stretching import ContrastStretchingTool
 from .convolution import Convolution
@@ -31,6 +32,7 @@ from .matching_configs import MatchingConfigsTool
 from .person_detection import PersonDetectionTool
 from .registry import ToolRegistry
 from .sharpening import SharpeningTool
+from .unet_segmentation import UNetSegmentationTool
 from .yolo_detection import YoloBloodCellTool, YoloPretrainedTool
 
 
@@ -38,6 +40,10 @@ def build_tool_registry() -> ToolRegistry:
     bow_session = BowSession()  # one Bag of Words model shared by the Set 7 tools
     return ToolRegistry(
         [
+            # Set 11
+            UNetSegmentationTool(),
+            # Set 10
+            ClipZeroShotTool(),
             # Set 9
             YoloPretrainedTool(),
             YoloBloodCellTool(),

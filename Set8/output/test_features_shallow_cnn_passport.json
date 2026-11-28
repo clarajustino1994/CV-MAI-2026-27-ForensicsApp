@@ -1,0 +1,32 @@
+{
+    "model_name": "shallow_cnn",
+    "feature_layer": "dense (Dense 100, last hidden layer)",
+    "architecture_file": "shallow_cnn_architecture.json",
+    "weights_file": "shallow_cnn_weights.weights.h5",
+    "preprocessing_instructions": "Cast to float32 and divide by 255.0. Input 32x32x3, no resizing.",
+    "feature_dim": 100,
+    "dataset": "CIFAR-10 test split",
+    "sample_size": {
+        "per_class": 100,
+        "total": 1000
+    },
+    "class_names": [
+        "airplane",
+        "automobile",
+        "bird",
+        "cat",
+        "deer",
+        "dog",
+        "frog",
+        "horse",
+        "ship",
+        "truck"
+    ],
+    "arrays": {
+        "features": "float32 (N, 100) shallow_cnn dense (Dense 100, last hidden layer) vectors",
+        "labels": "int64 (N,) true class index",
+        "test_indices": "int64 (N,) index of each image in x_test",
+        "images": "uint8 (N, 32, 32, 3) original RGB images",
+        "class_names": "str (10,) class names"
+    }
+}

@@ -1,0 +1,22 @@
+{
+    "model_name": "vgg_complete",
+    "dataset": "CIFAR-10",
+    "sample_size": {
+        "train": 50000,
+        "test": 10000
+    },
+    "class_names": [
+        "airplane",
+        "automobile",
+        "bird",
+        "cat",
+        "deer",
+        "dog",
+        "frog",
+        "horse",
+        "ship",
+        "truck"
+    ],
+    "preprocessing_instructions": "Resize inputs to 64x64, cast to float32 and divide by 255.0",
+    "optimizer_and_loss": "SGD, Categorical Crossentropy"
+}

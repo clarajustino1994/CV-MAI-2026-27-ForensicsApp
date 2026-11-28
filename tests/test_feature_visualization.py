@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -6,14 +7,13 @@ from unittest import mock
 import numpy as np
 
 from forensics_app.core import ImageDocument
+from forensics_app.tools.cnn_classification import DEEPER_VGG, MODELS
 from forensics_app.tools.feature_visualization import (
-    ACTION_EXTRACT,
-    ACTION_LOAD,
+    ACTION_PROJECT,
     FeatureVisualizationTool,
     load_features,
+    plot_path,
     plot_projections,
-    save_features,
-    stratified_indices,
 )
 
 MODULE = "forensics_app.tools.feature_visualization"
@@ -28,81 +28,103 @@ def make_features(per_class: int = 20) -> tuple[np.ndarray, np.ndarray]:
     return features.astype(np.float32), labels
 
 
-class FeatureVisualizationHelpersTests(unittest.TestCase):
-    def test_stratified_indices_takes_first_n_of_each_class(self) -> None:
-        labels = np.array([0, 1, 0, 2, 1, 0, 2, 1, 2])
-        indices = stratified_indices(labels, 2)
-        np.testing.assert_array_equal(indices, [0, 2, 1, 4, 3, 6])
+def write_features(folder: Path, model) -> None:
+    """Same arrays as the .npz files written by the Set 8 notebook."""
+    features, labels = make_features()
+    np.savez_compressed(
+        model.features_path(folder),
+        features=features,
+        labels=labels,
+        class_names=np.array(CLASS_NAMES),
+    )
 
-    def test_save_and_load_round_trip(self) -> None:
-        features, labels = make_features()
+
+class FeatureVisualizationHelpersTests(unittest.TestCase):
+    def test_load_features_reads_notebook_arrays(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
-            path = Path(folder) / "sub" / "features.npz"
-            save_features(path, features, labels, CLASS_NAMES)
-            loaded, loaded_labels, names = load_features(path)
-        np.testing.assert_array_equal(loaded, features)
-        np.testing.assert_array_equal(loaded_labels, labels)
+            write_features(Path(folder), DEEPER_VGG)
+            features, labels, names = load_features(
+                DEEPER_VGG.features_path(Path(folder))
+            )
+        self.assertEqual(features.shape, (60, 16))
+        self.assertEqual(len(labels), 60)
         self.assertEqual(names, CLASS_NAMES)
 
     def test_plot_projections_returns_rgb_image(self) -> None:
         _, labels = make_features(5)
         points = np.random.default_rng(1).normal(size=(len(labels), 2))
-        image = plot_projections({"t-SNE": points, "UMAP": points}, labels, CLASS_NAMES)
+        image = plot_projections(
+            {"t-SNE": points, "UMAP": points}, labels, CLASS_NAMES, "Deeper VGG"
+        )
         self.assertEqual(image.mode, "RGB")
         self.assertGreater(image.width, image.height)
+
+    def test_plot_file_is_named_after_the_model(self) -> None:
+        self.assertEqual(
+            plot_path(DEEPER_VGG, Path("out")).name,
+            "test_features_deeper_vgg_tsne_umap.png",
+        )
 
 
 class FeatureVisualizationToolTests(unittest.TestCase):
     def setUp(self) -> None:
         self.folder = tempfile.TemporaryDirectory()
-        root = Path(self.folder.name)
-        self.tool = FeatureVisualizationTool(root / "f.npz", root / "plot.png")
-        self.document = ImageDocument()
+        self.root = Path(self.folder.name)
+        self.tool = FeatureVisualizationTool(model_dir=self.root)
 
     def tearDown(self) -> None:
         self.folder.cleanup()
 
-    def run_tool(self, choice: int | None, options_seen: list) -> object:
+    def run_tool(self, model_index, details_clicked=True):
+        self.options_seen: list = []
+
         def fake_choice(_parent, _title, _prompt, options):
-            options_seen.extend(options)
-            return choice
+            self.options_seen.extend(options)
+            return model_index
 
-        with (
-            mock.patch(f"{MODULE}.ask_choice", fake_choice),
-            mock.patch(f"{MODULE}.ProgressDialog") as dialog,
-        ):
-            dialog.return_value.__enter__.return_value = None
-            return self.tool.run(mock.Mock(), self.document)
-
-    def test_cancel_returns_none(self) -> None:
-        self.assertIsNone(self.run_tool(None, []))
-
-    def test_without_saved_features_only_extract_is_offered(self) -> None:
-        features, labels = make_features()
-        options: list = []
         with (
             mock.patch(
-                f"{MODULE}.extract_test_features", return_value=(features, labels)
-            ) as extract,
-            mock.patch(f"{MODULE}.load_class_names", return_value=CLASS_NAMES),
+                "forensics_app.tools.cnn_classification.ask_choice", fake_choice
+            ),
+            mock.patch(
+                f"{MODULE}.ask_details_action", return_value=details_clicked
+            ) as self.dialog,
+            mock.patch(f"{MODULE}.ProgressDialog") as progress,
         ):
-            result = self.run_tool(0, options)
-        self.assertEqual(options, [ACTION_EXTRACT])
-        extract.assert_called_once()
-        self.assertTrue(self.tool.features_path.exists())
-        self.assertTrue(self.tool.plot_path.exists())
+            progress.return_value.__enter__.return_value = None
+            return self.tool.run(mock.Mock(), ImageDocument())
+
+    def test_cancel_model_choice_returns_none(self) -> None:
+        self.assertIsNone(self.run_tool(None))
+        self.assertEqual(self.options_seen, [model.title for model in MODELS])
+        self.dialog.assert_not_called()
+
+    def test_missing_features_reports_message(self) -> None:
+        result = self.run_tool(MODELS.index(DEEPER_VGG))
+        self.dialog.assert_not_called()
+        self.assertIn("test_features_deeper_vgg.npz not found", result.message)
+
+    def test_passport_is_shown_and_close_returns_none(self) -> None:
+        write_features(self.root, DEEPER_VGG)
+        DEEPER_VGG.features_passport_path(self.root).write_text(
+            json.dumps({"feature_dim": 16, "arrays": {"features": "float32"}}),
+            encoding="utf-8",
+        )
+        self.assertIsNone(self.run_tool(MODELS.index(DEEPER_VGG), False))
+        heading, details, action = self.dialog.call_args.args[2:5]
+        self.assertEqual(heading, "Deeper VGG features passport")
+        self.assertEqual(details["Feature dim"], "16")
+        self.assertNotIn("Arrays", details)
+        self.assertEqual(action, ACTION_PROJECT)
+        self.assertFalse(plot_path(DEEPER_VGG, self.root).exists())
+
+    def test_generates_projections_of_the_chosen_model(self) -> None:
+        write_features(self.root, DEEPER_VGG)
+        result = self.run_tool(MODELS.index(DEEPER_VGG))
+        self.assertTrue(plot_path(DEEPER_VGG, self.root).exists())
         self.assertIsNotNone(result.image)
         self.assertEqual(result.details["Feature size"], 16)
-
-    def test_saved_features_are_loaded_without_extracting(self) -> None:
-        features, labels = make_features()
-        save_features(self.tool.features_path, features, labels, CLASS_NAMES)
-        options: list = []
-        with mock.patch(f"{MODULE}.extract_test_features") as extract:
-            result = self.run_tool(0, options)
-        self.assertEqual(options, [ACTION_LOAD, ACTION_EXTRACT])
-        extract.assert_not_called()
-        self.assertIn("60 test feature vectors", result.message)
+        self.assertIn("60 Deeper VGG test feature vectors", result.message)
 
 
 if __name__ == "__main__":

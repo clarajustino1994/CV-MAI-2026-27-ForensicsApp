@@ -1,7 +1,9 @@
-"""Set 8: project ResNet50 features of the CIFAR-10 test set with t-SNE and UMAP.
+"""Set 8: project the test-set features of a Set 8 model with t-SNE and UMAP.
 
-The features are extracted once, saved to an ``.npz`` file and loaded from it on
-later runs, so the projections can be recomputed without running ResNet50 again.
+The user picks the model (shallow CNN, deeper VGG, complete VGG or InceptionV3
+transfer learning), sees the passport of its saved features, and then the
+features are projected to 2D. The features come from the ``.npz`` files written
+by the feature extraction cells of the Set 8 notebook.
 """
 
 from __future__ import annotations
@@ -22,71 +24,20 @@ from PIL import Image  # noqa: E402
 from forensics_app.core import ImageDocument  # noqa: E402
 
 from .base import ForensicsTool, ToolResult  # noqa: E402
-from .cnn_classification import MODEL_DIR, load_class_names  # noqa: E402
-from .dialogs import ProgressDialog, ask_choice  # noqa: E402
+from .cnn_classification import (  # noqa: E402
+    MODEL_DIR,
+    MODELS,
+    CnnModel,
+    choose_model,
+    passport_details,
+)
+from .dialogs import ProgressDialog, ask_details_action  # noqa: E402
 
-FEATURES_PATH = MODEL_DIR / "test_features_resnet50.npz"
-PLOT_PATH = MODEL_DIR / "test_features_tsne_umap.png"
-
-SAMPLES_PER_CLASS = 100
-BATCH_SIZE = 32
-RESNET_INPUT = (224, 224)
 RANDOM_STATE = 42
 
-ACTION_LOAD = "Load saved features"
-ACTION_EXTRACT = "Extract features again"
+ACTION_PROJECT = "Generate t-SNE / UMAP"
 
 Progress = Callable[[int, int, str], None]
-
-
-def stratified_indices(labels: np.ndarray, per_class: int) -> np.ndarray:
-    """First ``per_class`` indices of every class, grouped by class."""
-    return np.concatenate(
-        [np.flatnonzero(labels == cls)[:per_class] for cls in np.unique(labels)]
-    )
-
-
-def extract_test_features(
-    per_class: int = SAMPLES_PER_CLASS,
-    progress: Progress | None = None,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Extract ResNet50 ``avg_pool`` features of a stratified CIFAR-10 test subset.
-
-    Unlike the notebook, the images go through ``preprocess_input`` (0-255,
-    BGR, ImageNet mean subtracted), which is what the ImageNet weights expect.
-    """
-    import keras  # imported lazily: TensorFlow takes seconds to load
-    import tensorflow as tf
-    from keras.applications.resnet50 import ResNet50, preprocess_input
-
-    (_, _), (x_test, y_test) = keras.datasets.cifar10.load_data()
-    y_test = y_test.ravel()
-    indices = stratified_indices(y_test, per_class)
-    images, labels = x_test[indices], y_test[indices]
-
-    extractor = ResNet50(weights="imagenet", include_top=False, pooling="avg")
-
-    features = []
-    total = len(images)
-    for start in range(0, total, BATCH_SIZE):
-        if progress is not None:
-            progress(start, total, f"Extracting features: {start}/{total} images")
-        batch = tf.image.resize(images[start : start + BATCH_SIZE], RESNET_INPUT)
-        batch = preprocess_input(batch.numpy())
-        features.append(extractor.predict(batch, verbose=0))
-    if progress is not None:
-        progress(total, total, "Features extracted")
-
-    return np.concatenate(features).astype(np.float32), labels.astype(np.int64)
-
-
-def save_features(
-    path: Path, features: np.ndarray, labels: np.ndarray, class_names: tuple[str, ...]
-) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(
-        path, features=features, labels=labels, class_names=np.array(class_names)
-    )
 
 
 def load_features(path: Path) -> tuple[np.ndarray, np.ndarray, tuple[str, ...]]:
@@ -96,6 +47,10 @@ def load_features(path: Path) -> tuple[np.ndarray, np.ndarray, tuple[str, ...]]:
             data["labels"],
             tuple(str(name) for name in data["class_names"]),
         )
+
+
+def plot_path(model: CnnModel, folder: Path) -> Path:
+    return folder / f"test_features_{model.features_tag}_tsne_umap.png"
 
 
 def project_tsne(features: np.ndarray) -> np.ndarray:
@@ -122,6 +77,7 @@ def plot_projections(
     projections: dict[str, np.ndarray],
     labels: np.ndarray,
     class_names: tuple[str, ...],
+    model_title: str,
 ) -> Image.Image:
     """Scatter each 2D projection side by side, one colour per class."""
     figure, axes = plt.subplots(
@@ -139,7 +95,7 @@ def plot_projections(
                 color=colours(cls % 10),
                 label=class_name,
             )
-        ax.set_title(f"{name} of ResNet50 test features")
+        ax.set_title(f"{name} of {model_title} test features")
         ax.set_xticks([])
         ax.set_yticks([])
     axes[0][-1].legend(loc="upper left", bbox_to_anchor=(1.01, 1), frameon=False)
@@ -157,72 +113,103 @@ class FeatureVisualizationTool(ForensicsTool):
     title = "Feature visualization (t-SNE / UMAP)"
     category = "Set 8 duties"
     description = (
-        "Extract ResNet50 features of the CIFAR-10 test set, save them, load them "
-        "and project them to 2D with t-SNE and UMAP."
+        "Choose one of the Set 8 models, see the passport of its saved CIFAR-10 "
+        "test features, and project them to 2D with t-SNE and UMAP."
     )
     requires_image = False
 
     def __init__(
-        self, features_path: Path = FEATURES_PATH, plot_path: Path = PLOT_PATH
+        self, model_dir: Path = MODEL_DIR, models: tuple[CnnModel, ...] = MODELS
     ) -> None:
-        self.features_path = features_path
-        self.plot_path = plot_path
+        self.model_dir = model_dir
+        self.models = models
 
     def run(self, parent: tk.Misc, document: ImageDocument) -> ToolResult | None:
-        options = [ACTION_EXTRACT]
-        if self.features_path.exists():
-            options.insert(0, ACTION_LOAD)
-            prompt = f"Saved features found in {self.features_path.name}."
-        else:
-            prompt = "No saved features yet: they will be extracted (about 1 minute)."
-        choice = ask_choice(parent, self.title, prompt, options)
-        if choice is None:
+        # 1. Model, 2. passport of its features, 3. the projections
+        model = choose_model(
+            parent,
+            self.title,
+            "Choose the model whose features to project:",
+            self.models,
+        )
+        if model is None:
+            return None
+
+        features_path = model.features_path(self.model_dir)
+        if not features_path.exists():
+            return ToolResult(
+                message=f"No saved features for {model.title}: "
+                f"{features_path.name} not found. Run its feature extraction "
+                "cell in the Set 8 notebook first."
+            )
+        details = self.features_details(model)
+        if not ask_details_action(
+            parent,
+            self.title,
+            f"{model.title} features passport",
+            details,
+            ACTION_PROJECT,
+        ):
             return None
 
         try:
             with ProgressDialog(parent, self.title) as progress:
-                if options[choice] == ACTION_EXTRACT:
-                    features, labels = extract_test_features(progress=progress)
-                    save_features(
-                        self.features_path, features, labels, load_class_names()
-                    )
-                return self.visualize(progress)
+                return self.visualize(model, progress)
         except ImportError as error:
             return ToolResult(
                 message=f"Missing dependency ({error.name}). "
-                "Run: pip install tensorflow umap-learn"
+                "Run: pip install scikit-learn umap-learn"
             )
 
-    def visualize(self, progress: Progress | None = None) -> ToolResult:
+    def features_details(self, model: CnnModel) -> dict[str, str]:
+        """Passport of the saved features, or of the model if it has none."""
+        for path in (
+            model.features_passport_path(self.model_dir),
+            model.passport_path(self.model_dir),
+        ):
+            try:
+                details = passport_details(path)
+            except (OSError, ValueError):
+                continue
+            details.pop("Arrays", None)  # array dtypes: noise for the user
+            details["Features file"] = model.features_path(self.model_dir).name
+            return details
+        return {"Features file": model.features_path(self.model_dir).name}
+
+    def visualize(
+        self, model: CnnModel, progress: Progress | None = None
+    ) -> ToolResult:
         """Load the saved features, project them and plot both projections."""
 
         def step(n: int, text: str) -> None:
             if progress is not None:
                 progress(n, 3, text)
 
+        features_path = model.features_path(self.model_dir)
         step(0, "Loading saved features…")
-        features, labels, class_names = load_features(self.features_path)
+        features, labels, class_names = load_features(features_path)
         step(1, "Computing t-SNE…")
         projections = {"t-SNE": project_tsne(features)}
         step(2, "Computing UMAP…")
         projections["UMAP"] = project_umap(features)
         step(3, "Plotting…")
 
-        image = plot_projections(projections, labels, class_names)
-        image.save(self.plot_path)
+        image = plot_projections(projections, labels, class_names, model.title)
+        output = plot_path(model, self.model_dir)
+        image.save(output)
 
         details: dict[str, Any] = {
             "Operation": "Feature visualization (t-SNE / UMAP)",
-            "Model": "ResNet50 (ImageNet), avg_pool layer",
+            "Model": f"{model.title}: {model.architecture}",
             "Dataset": "CIFAR-10 test set",
             "Images": f"{len(labels)} ({len(labels) // len(class_names)} per class)",
             "Feature size": features.shape[1],
-            "Features file": str(self.features_path),
-            "Plot file": str(self.plot_path),
+            "Features file": str(features_path),
+            "Plot file": str(output),
         }
         return ToolResult(
             image=image,
-            message=f"Projected {len(labels)} test feature vectors with t-SNE "
-            "and UMAP.",
+            message=f"Projected {len(labels)} {model.title} test feature vectors "
+            "with t-SNE and UMAP.",
             details=details,
         )
